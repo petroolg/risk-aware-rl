@@ -25,10 +25,10 @@ class TwoStateGame:
         if update_theta:
             g_prime = 0.0 if (self.Var - self.var_bound) < 0.0 else 2.0 * (self.Var - self.var_bound)
             if type == 'Var':
-                self.theta += self.beta_step * (R - self.lam * g_prime * (R * R - 2.0 * self.G)) * zk[np.newaxis].T
+                self.theta += self.beta_step * (R - self.lam * g_prime * (R * R - 2.0 * self.G)) * zk.T
             if type == 'Sharpe':
                 self.theta += self.beta_step / np.sqrt(self.Var) * \
-                              (R - (self.G * R * R - 2.0 * self.G * self.G * R) / (2 * self.Var)) * zk[np.newaxis].T
+                              (R - (self.G * R * R - 2.0 * self.G * self.G * R) / (2 * self.Var)) * zk.T
 
     # p_a represents a probability to be in the 2nd state
     def move(self, p_a):
@@ -57,8 +57,8 @@ class TwoStateGame:
 
     # gradient of log-likelihood used for computing zk
     def log_like(self):
-        v = (self.eps*self.state)/((self.eps-1.0)*np.exp(self.state.dot(self.theta)) - self.eps) + \
-        self.state/(np.exp(self.state.dot(self.theta)) + 1.0)
+        v = (self.eps*self.state)/((self.eps-1.0)*np.exp(np.multiply(self.state,self.theta.T)) - self.eps) + \
+        self.state/(np.exp(np.multiply(self.state,self.theta.T)) + 1.0)
         return v
 
     # function plays one game, computes total reward and zk along trajectory
@@ -77,7 +77,7 @@ class TwoStateGame:
 def plot_run_avg(vec, n, **kwargs):
     p = []
     for i in range(len(vec)):
-        p.append(np.mean(vec[max(0, i - n/2) : min(i+n/2, len(vec)-1)]))
+        p.append(np.mean(vec[max(0, i - int(n/2)) : min(i+int(n/2), len(vec)-1)]))
     plt.plot(p, **kwargs)
 
 if __name__ == '__main__':
