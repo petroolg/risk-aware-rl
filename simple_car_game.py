@@ -56,7 +56,8 @@ class Road_game:
 
         self.goal = 200
 
-        self.theta = np.random.sample((self.road.pole.shape[0]*self.road.pole.shape[1], len(self.actions))) - 0.5
+        self.state_lenth = self.road.pole.shape[0]*self.road.pole.shape[1]
+        self.theta = (np.random.sample((self.state_lenth, len(self.actions))) - 0.5)/np.sqrt(self.state_lenth)
 
         self.G = 0.0  # estimation of total reward
         self.Var = 0.0  # estimation of variance of reward
@@ -71,8 +72,7 @@ class Road_game:
 
     @property
     def state(self):
-        m, n = self.road.pole.shape
-        return self.road.pole.reshape(m * n)
+        return self.road.pole.reshape(self.state_lenth)
 
     def collision(self):
         x, y = self.car.pos - [self.car_size[0]/2, 0]
@@ -95,9 +95,12 @@ class Road_game:
     def update(self, R, zk, type='Var', update_theta=True):
         self.G += self.alpha_step * (R - self.G)
         self.Var += self.alpha_step * (R * R - self.G * self.G - self.Var)
+        print('Variance', self.Var)
+        print('ZK:', np.min(zk), np.max(zk))
         if update_theta:
             g_prime = 0.0 if (self.Var - self.var_bound) < 0.0 else 2.0 * (self.Var - self.var_bound)
             if type == 'Var':
+                print('Update:', (R - self.lam * g_prime * (R * R - 2.0 * self.G)))
                 self.theta += self.beta_step * (R - self.lam * g_prime * (R * R - 2.0 * self.G)) * zk
             if type == 'Sharpe':
                 self.theta += self.beta_step / np.sqrt(self.Var) * \
@@ -122,16 +125,21 @@ class Road_game:
         return total_rew, zk
 
     # function returns probability of being in th 2nd state using softmax policy
-    def sample_action(self):
-        """epsilon-constrained softmax policy"""
-        return self.eps + (1.0 - 2.0*self.eps)/(1.0 + np.exp(-self.state.dot(self.theta)))
+    def sample_action(self, temperature=2.0):
+        # http://incompleteideas.net/sutton/book/ebook/node17.html
+        lst = self.state.dot(self.theta)/temperature
+        print(lst)
+        e_lst = np.exp(lst)
+        return e_lst / np.sum(e_lst)
 
     # gradient of log-likelihood used for computing zk
-    def log_like(self):
-        rep_state = np.repeat(self.state[np.newaxis],len(self.actions), axis=0)
-        v = np.divide(np.multiply(self.eps[np.newaxis].T, rep_state),((self.eps[np.newaxis].T - 1.0) * np.exp(np.multiply(self.state, self.theta.T)) - self.eps[np.newaxis].T)) + \
-            np.divide(rep_state,(np.exp(np.multiply(self.state, self.theta.T)) + 1.0))
-        return v.T
+    def log_like(self, temperature=2.0):
+        lst = self.state.dot(self.theta) / temperature
+        e_lst = np.exp(lst)
+        d_lst = np.repeat([[(e_lst[1]+e_lst[2]), (e_lst[0]+e_lst[2]), (e_lst[0]+e_lst[1])]], self.state_lenth, axis=0)
+        d_lst = np.multiply(self.state[np.newaxis].T, d_lst/np.sum(e_lst))
+        
+        return d_lst
 
     # initialization function, chooses state randomly
     def init_game(self):
@@ -155,9 +163,14 @@ class Road_game:
 
     def draw_dist(self):
         if hasattr(self, 'dist'):
-            pygame.draw.rect(self.DISPLAY, THECOLORS.get('blue'), (ROAD_W + 20, 20+100*(1-self.dist[0]), 30, 20+100*self.dist[0]))
-            pygame.draw.rect(self.DISPLAY, THECOLORS.get('blue'), (ROAD_W + 60, 20+100*(1-self.dist[1]), 30, 20+100*self.dist[1]))
-            pygame.draw.rect(self.DISPLAY, THECOLORS.get('blue'), (ROAD_W + 100, 20+100*(1-self.dist[2]), 30, 20+100*self.dist[2]))
+            try:
+                pygame.draw.rect(self.DISPLAY, THECOLORS.get('blue'), (ROAD_W + 20, 20+100*(1-self.dist[0]), 30, 20+100*self.dist[0]))
+                pygame.draw.rect(self.DISPLAY, THECOLORS.get('blue'), (ROAD_W + 60, 20+100*(1-self.dist[1]), 30, 20+100*self.dist[1]))
+                pygame.draw.rect(self.DISPLAY, THECOLORS.get('blue'), (ROAD_W + 100, 20+100*(1-self.dist[2]), 30, 20+100*self.dist[2]))
+            except TypeError:
+                print((ROAD_W + 20, 20+100*(1-self.dist[0]), 30, 20+100*self.dist[0]))
+                print((ROAD_W + 60, 20+100*(1-self.dist[1]), 30, 20+100*self.dist[1]))
+                print((ROAD_W + 100, 20+100*(1-self.dist[2]), 30, 20+100*self.dist[2]))
 
     def render(self):
         self.road.pole = np.zeros_like(self.road.pole)
@@ -191,7 +204,6 @@ class Road_game:
     # p_a represents a probability to be in the 2nd state
     def move(self, p_a):
 
-        p_a = np.exp(p_a) / np.sum(np.exp(p_a),axis=0)  # apllying softmax to normalize distribution
         self.dist = p_a.copy()
         a = np.random.choice(self.actions, p=p_a)
 
@@ -204,11 +216,11 @@ class Road_game:
 
         if self.collision():
             self.game_over=True
-            return -100
+            return -1
         if self.goal_reached():
             self.game_over=True
-            return 20
-        return -1
+            return 1
+        return -0.00001
 
     def update_game(self):
         for v in self.ov:
@@ -222,7 +234,7 @@ if __name__ == '__main__':
     N_games_test = 500  # number of games to play for data gathering
     length_of_game = 40  # number of steps in one game
 
-    variance_bounds = [100.0, 0.0]  # variance bounds
+    variance_bounds = [10.0, 0.0]  # variance bounds
 
     tr_plot, theta_plot, Var_plot, G_plot = [], [], [], []  # data for plots
 
