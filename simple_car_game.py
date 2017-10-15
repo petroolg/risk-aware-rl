@@ -2,13 +2,16 @@ import time
 import numpy as np
 import pygame
 from matplotlib import pyplot as plt
-from pygame import QUIT
+from pygame import QUIT, K_LEFT, K_RIGHT, K_DOWN, K_UP
 from pygame.colordict import THECOLORS
 
 # Based on Policy Gradients with variance Related Risk Criteria
 
-ROAD_W = 50
-ROAD_H = 150
+ROAD_W = 30
+ROAD_H = 100
+
+def clamp(n, smallest, largest):
+    return max(smallest, min(n, largest))
 
 class car:
 
@@ -31,8 +34,9 @@ class car:
 # function plotting running average of vector vec, n specifies width of window
 def plot_run_avg(vec, n, **kwargs):
     p = []
+    vec = np.array(vec)
     for i in range(len(vec)):
-        p.append(np.mean(vec[max(0, i - n/2) : min(i+n/2, len(vec)-1)]))
+        p.append(np.mean(vec[int(max(0, i - n/2)) : int(min(i+n/2, len(vec)-1))]))
     plt.plot(p, **kwargs)
 
 class road:
@@ -44,6 +48,7 @@ class road:
         self.l1c = int(3 * self.width / 4) + 1
         self.l2v = line2_vel
         self.l1v = line1_vel
+        self.vel = np.linspace(self.l1v, self.l2v, self.l1c - self.l2c)
 
 
 class Road_game:
@@ -54,7 +59,7 @@ class Road_game:
 
         self.actions = np.array([-1, 0, 1])
 
-        self.goal = 200
+        self.goal = 270
 
         self.state_lenth = self.road.pole.shape[0]*self.road.pole.shape[1]
         self.theta = (np.random.sample((self.state_lenth, len(self.actions))) - 0.5)/np.sqrt(self.state_lenth)
@@ -62,10 +67,9 @@ class Road_game:
         self.G = 0.0  # estimation of total reward
         self.Var = 0.0  # estimation of variance of reward
         self.var_bound = var_bound  # threshold of variance
-        self.alpha_step = 0.1  # step of gradient ascent
-        self.beta_step = 0.1  # step of gradient ascent
+        self.alpha_step = 0.005  # step of gradient ascent
+        self.beta_step = 0.005  # step of gradient ascent
         self.lam = 0.1  # penalization, related to the approximation of COP solution, equations (9) and (10)
-        self.eps = 0.0001*np.ones(len(self.actions))  # epsilon for epsilon-constrained softmax policy
 
         pygame.init()
         self.DISPLAY = pygame.display.set_mode((ROAD_W+150, max(150, ROAD_H)), 0, 32)
@@ -106,6 +110,24 @@ class Road_game:
                 self.theta += self.beta_step / np.sqrt(self.Var) * \
                               (R - (self.G * R * R - 2.0 * self.G * self.G * R) / (2 * self.Var)) * zk
 
+    def auto_move(self, zk):
+        p_a = self.sample_action()
+        zk += self.log_like()
+        rew = self.move(p_a)
+        return rew, zk
+
+    def process_keys(self):
+        keys = pygame.key.get_pressed()
+        p_a = np.zeros(3)
+        if keys[K_RIGHT]:
+            p_a[2] = 1.0
+        elif keys[K_LEFT]:
+            p_a[0] = 1.0
+        else:
+            p_a[1] = 1.0
+        rew = self.move(p_a)
+        return rew, 0.0
+
     # function plays one game, computes total reward and zk along trajectory
     def play_one(self, T):
         total_rew, zk = 0.0, 0.0
@@ -114,21 +136,21 @@ class Road_game:
         # plt.imshow(self.road.pole)
         # plt.waitforbuttonpress
         while i < T and not self.game_over:
-            p_a = self.sample_action()
-            zk += self.log_like()
-            rew = self.move(p_a)
+            rew, zk = self.auto_move(zk)
+            # rew, zk = self.process_keys()
             total_rew += rew
-            time.sleep(0.2)
+            # time.sleep(0.2)
             i+=1
+            # print(self.car.pos, i)
             # plt.imshow(self.road.pole)
             # plt.waitforbuttonpress()
         return total_rew, zk
 
     # function returns probability of being in th 2nd state using softmax policy
-    def sample_action(self, temperature=2.0):
+    def sample_action(self, temperature=20.0):
         # http://incompleteideas.net/sutton/book/ebook/node17.html
         lst = self.state.dot(self.theta)/temperature
-        print(lst)
+        # print(lst)
         e_lst = np.exp(lst)
         return e_lst / np.sum(e_lst)
 
@@ -146,10 +168,11 @@ class Road_game:
         self.game_over = False
         self.ov = []
 
-        pos = np.random.choice(np.arange(int(self.road.width/10),self.road.width))
+        pos = np.random.choice(np.arange(0,self.road.width,3))
+        pos = np.random.choice(np.arange(0,self.road.width,3))
         for i in range(3):
             self.ov.append(car([self.road.l2c, pos], self.car_size,  self.road.l2v))
-            pos += np.random.choice(np.arange(int(self.road.width/10 + self.car_size[1]),self.road.width))
+            pos += np.random.choice(np.arange(int(self.road.width/10 + self.car_size[1]),self.road.width*2,3))
 
         pos = [self.road.l1c, int(self.road.length/2 + 2*self.car_size[1])]
         self.ov.append(car(pos, self.car_size, self.road.l1v))
@@ -208,19 +231,19 @@ class Road_game:
         a = np.random.choice(self.actions, p=p_a)
 
         if (self.car.pos[0] > self.road.l2c and a == -1) or (self.car.pos[0] <= self.road.l1c and a == 1):
-            self.car.pos[0] += a
-        vel = np.linspace(self.road.l1v, self.road.l2v, self.road.l1c - self.road.l2c)
-        self.car.v = vel[self.road.l1c - self.car.pos[0]]
+            self.car.pos[0] += 3*a
+
+        self.car.v = self.road.vel[clamp(self.road.l1c - self.car.pos[0], 0, len(self.road.vel)-1)]
 
         self.update_game()
 
         if self.collision():
             self.game_over=True
-            return -1
+            return -3
         if self.goal_reached():
             self.game_over=True
-            return 1
-        return -0.00001
+            return 3
+        return -0.01
 
     def update_game(self):
         for v in self.ov:
@@ -231,10 +254,11 @@ class Road_game:
 if __name__ == '__main__':
     # TODO: make beta_step and alpha_step fulfil condition from paper
     N_games_learn = 500 # number of games to play for learning
-    N_games_test = 500  # number of games to play for data gathering
+    N_games_test = 200 # number of games to play for data gathering
     length_of_game = 40  # number of steps in one game
+    theta_update_step = 75
 
-    variance_bounds = [10.0, 0.0]  # variance bounds
+    variance_bounds = [100.0,0.0]  # variance bounds
 
     tr_plot, theta_plot, Var_plot, G_plot = [], [], [], []  # data for plots
 
@@ -243,17 +267,17 @@ if __name__ == '__main__':
         total_rews, theta, Var, G = [], [], [], []
         for i in range(N_games_learn):
             ut = False  # parameter which specifies if theta is updated in that iteration
-            if i == N_games_learn/2:  # in the middle of the game make lambda to be almost 1.0
+            if i == int(2*N_games_learn/3):  # in the middle of the game make lambda to be almost 1.0
                 # this is related to the approximation of COP solution approximation
                 # equations (9) and (10) and 7 lines of text under
                 game.lam = 0.99
-            if i % 20 == 0:
+            if i % theta_update_step == 0 and i != 0:
                 ut = True  # theta gets updated every 20. iteration
-                theta.append(game.theta.copy())  # gathering data for graph
+                # theta.append(game.theta.copy())  # gathering data for graph
             Var.append(game.Var)  # gathering data for graph
             G.append(game.G)  # gathering data for graph
             total_rew, zk = game.play_one(length_of_game)
-            print(total_rew)
+            print('Total reward, iteration:', total_rew, i)
             game.update(total_rew, zk, update_theta=ut)  # finally update everything
 
         for i in range(N_games_test):
@@ -261,30 +285,32 @@ if __name__ == '__main__':
             total_rews.append(total_rew)  # gathering data for graph
 
         tr_plot.append(total_rews)  # gathering data for graph
-        theta_plot.append(theta)  # gathering data for graph
+        # theta_plot.append(theta)  # gathering data for graph
         Var_plot.append(Var)  # gathering data for graph
         G_plot.append(G)  # gathering data for graph
 
+    plt.figure()
     for rew, v in zip(tr_plot,variance_bounds):
         plt.hist(rew, label='Var bound %f'%v)
     plt.legend()
     plt.title('Total rewards')
-    plt.show()
 
-    for theta, v in zip(theta_plot,variance_bounds):
-        plt.plot(np.arange(N_games_learn/20), np.array(theta)[:,0],
-                 np.arange(N_games_learn/20), np.array(theta)[:, 1],
-                 label='Var bound %f'%v)
-    plt.legend()
-    plt.title('Patameters theta')
-    plt.show()
+    # plt.figure()
+    # for theta, v in zip(theta_plot,variance_bounds):
+    #     plt.plot(np.arange(N_games_learn / theta_update_step - 1), np.array(theta)[:, 0],
+    #              np.arange(N_games_learn / theta_update_step - 1), np.array(theta)[:, 1],
+    #              np.arange(N_games_learn / theta_update_step - 1), np.array(theta)[:, 2],
+    #              label='Var bound %f'%v)
+    # plt.legend()
+    # plt.title('Patameters theta')
 
+    plt.figure()
     for rew, v in zip(Var_plot,variance_bounds):
         plot_run_avg(rew, 100, label='Var bound %f'%v)
     plt.legend()
     plt.title('Variance')
-    plt.show()
 
+    plt.figure()
     for rew, v in zip(G_plot,variance_bounds):
         plot_run_avg(rew, 200, label='Var bound %f'%v)
     plt.legend()
