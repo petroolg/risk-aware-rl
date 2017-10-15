@@ -9,19 +9,19 @@ def clamp(n, smallest, largest):
 class TwentyStateGame:
 
     def __init__(self, var_bound):
-        self.state_length = 25
+        self.state_length = 22
         self.state = np.zeros(self.state_length)  # discrete states
         self.position = 0
         self.speed = 0
-        self.theta = np.random.random_sample((self.state_length,3))/25.0  # parameters
+        self.theta = np.random.random_sample((self.state_length,3))/self.state_length  # parameters
         self.actions = np.array([-1, 0, 1])
         self.pitfall = False
 
         self.G = 0.0  # estimation of total reward
         self.Var = 0.0  # estimation of variance of reward
         self.var_bound = var_bound  # threshold of variance
-        self.alpha_step = 0.1  # step of gradient ascent
-        self.beta_step = 0.1  # step of gradient ascent
+        self.alpha_step = 0.01  # step of gradient ascent
+        self.beta_step = 0.01  # step of gradient ascent
         self.lam = 0.1  # penalization, related to the approximation of COP solution, equations (9) and (10)
         self.eps = 0.0001  # epsilon for epsilon-constrained softmax policy
 
@@ -61,13 +61,13 @@ class TwentyStateGame:
 
     def update_game(self, a):
         self.state[self.position] = 0.0
-        self.state[20 + self.speed] = 0.0
+        self.state[-2] = 0.0
 
         self.speed = clamp(self.speed + a, 0, 3)
         self.position = clamp(self.position + self.speed, 0, 19)
 
         self.state[self.position] = 1.0
-        self.state[20+self.speed] = 1.0
+        self.state[-2] = self.speed
         self.spawn_pitfall()
 
     # initialization function, chooses state randomly
@@ -76,7 +76,7 @@ class TwentyStateGame:
         self.position = 0
         self.speed = 0
         self.state[0] = 1.0
-        self.state[20] = 1.0
+        self.state[-2] = 0.0
         self.game_over = False
         self.spawn_pitfall()
 
@@ -132,7 +132,8 @@ if __name__ == '__main__':
     N_games_test = 200  # number of games to play for data gathering
     length_of_game = 40  # number of steps in one game
 
-    variance_bounds = [100.0, 0.0]  # variance bounds
+    variance_bounds = [0.0, 100.0]  # variance bounds
+    colors = ['red', 'blue']
 
     tr_plot, theta_plot, Var_plot, G_plot = [], [], [], []  # data for plots
 
@@ -145,7 +146,7 @@ if __name__ == '__main__':
                 # this is related to the approximation of COP solution approximation
                 # equations (9) and (10) and 7 lines of text under
                 game.lam = 0.99
-            if i % 20 == 0:
+            if i % 50 == 0:
                 ut = True  # theta gets updated every 20. iteration
                 theta.append(game.theta.copy())  # gathering data for graph
             Var.append(game.Var)  # gathering data for graph
@@ -162,26 +163,31 @@ if __name__ == '__main__':
         Var_plot.append(Var)  # gathering data for graph
         G_plot.append(G)  # gathering data for graph
 
+    plt.figure()
     for rew, v in zip(tr_plot,variance_bounds):
         plt.hist(rew, label='Var bound %f'%v)
     plt.legend()
     plt.title('Total rewards')
-    plt.show()
+    # plt.show()
 
-    for theta, v in zip(theta_plot,variance_bounds):
-        plt.plot(np.arange(N_games_learn/20), np.array(theta)[:,0],
-                 np.arange(N_games_learn/20), np.array(theta)[:, 1],
-                 label='Var bound %f'%v)
-    plt.legend()
+    plt.figure()
+    for theta, v, c in zip(theta_plot,variance_bounds, colors):
+        th = plt.plot(np.arange(N_games_learn/50), np.array(theta)[:,0],
+                 np.arange(N_games_learn/50), np.array(theta)[:, 1],
+                 np.arange(N_games_learn / 50), np.array(theta)[:, 2],
+                 color=c)
+        plt.legend([th], ['Var bound %f' % v])
     plt.title('Patameters theta')
-    plt.show()
+    # plt.show()
 
+    plt.figure()
     for rew, v in zip(Var_plot,variance_bounds):
         plot_run_avg(rew, 100, label='Var bound %f'%v)
     plt.legend()
     plt.title('Variance')
-    plt.show()
+    # plt.show()
 
+    plt.figure()
     for rew, v in zip(G_plot,variance_bounds):
         plot_run_avg(rew, 200, label='Var bound %f'%v)
     plt.legend()
