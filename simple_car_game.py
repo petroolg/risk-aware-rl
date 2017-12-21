@@ -69,10 +69,12 @@ class Road_game:
         self.var_bound = var_bound  # threshold of variance
         self.alpha_step = 0.005  # step of gradient ascent
         self.beta_step = 0.005  # step of gradient ascent
-        self.lam = 0.1  # penalization, related to the approximation of COP solution, equations (9) and (10)
+        self.lam = 0.7  # penalization, related to the approximation of COP solution, equations (9) and (10)
 
         pygame.init()
-        self.DISPLAY = pygame.display.set_mode((ROAD_W+150, max(150, ROAD_H)), 0, 32)
+        self.DISPLAY = pygame.display.set_mode((ROAD_W+150, ROAD_H), 0, 32)
+        pygame.display.set_caption('risk-aware-rl')
+
 
     @property
     def state(self):
@@ -187,11 +189,22 @@ class Road_game:
     def draw_dist(self):
         if hasattr(self, 'dist'):
             try:
-                pygame.draw.rect(self.DISPLAY, THECOLORS.get('blue'), (ROAD_W + 20, 20+100*(1-self.dist[0]), 30, 20+100*self.dist[0]))
-                pygame.draw.rect(self.DISPLAY, THECOLORS.get('blue'), (ROAD_W + 60, 20+100*(1-self.dist[1]), 30, 20+100*self.dist[1]))
-                pygame.draw.rect(self.DISPLAY, THECOLORS.get('blue'), (ROAD_W + 100, 20+100*(1-self.dist[2]), 30, 20+100*self.dist[2]))
+                pygame.draw.rect(self.DISPLAY, THECOLORS.get('blue'), (ROAD_W + 20, 20+50*(1-self.dist[0]), 30, 10+50*self.dist[0]))
+                pygame.draw.rect(self.DISPLAY, THECOLORS.get('blue'), (ROAD_W + 60, 20+50*(1-self.dist[1]), 30, 10+50*self.dist[1]))
+                pygame.draw.rect(self.DISPLAY, THECOLORS.get('blue'), (ROAD_W + 100, 20+50*(1-self.dist[2]), 30,10+50*self.dist[2]))
+
+                myfont = pygame.font.SysFont("helvetica", 10)
+
+                # render text
+                label1 = myfont.render("left", 1, (0, 0, 0))
+                label2 = myfont.render("nothing", 1, (0, 0, 0))
+                label3 = myfont.render("right", 1, (0, 0, 0))
+                self.DISPLAY.blit(label1, (ROAD_W + 27, 85))
+                self.DISPLAY.blit(label2, (ROAD_W + 60, 85))
+                self.DISPLAY.blit(label3, (ROAD_W + 106, 85))
+
             except TypeError:
-                print((ROAD_W + 20, 20+100*(1-self.dist[0]), 30, 20+100*self.dist[0]))
+                print((ROAD_W + 30, 20+100*(1-self.dist[0]), 30, 20+100*self.dist[0]))
                 print((ROAD_W + 60, 20+100*(1-self.dist[1]), 30, 20+100*self.dist[1]))
                 print((ROAD_W + 100, 20+100*(1-self.dist[2]), 30, 20+100*self.dist[2]))
 
@@ -253,12 +266,12 @@ class Road_game:
 
 if __name__ == '__main__':
     # TODO: make beta_step and alpha_step fulfil condition from paper
-    N_games_learn = 500 # number of games to play for learning
+    N_games_learn = 2000 # number of games to play for learning
     N_games_test = 200 # number of games to play for data gathering
     length_of_game = 40  # number of steps in one game
     theta_update_step = 75
 
-    variance_bounds = [100.0,0.0]  # variance bounds
+    variance_bounds = [4.0,3.0,2.0,0.0]  # variance bounds
 
     tr_plot, theta_plot, Var_plot, G_plot = [], [], [], []  # data for plots
 
@@ -277,7 +290,7 @@ if __name__ == '__main__':
             Var.append(game.Var)  # gathering data for graph
             G.append(game.G)  # gathering data for graph
             total_rew, zk = game.play_one(length_of_game)
-            print('Total reward, iteration:', total_rew, i)
+            # print('Total reward, iteration:', total_rew, i)
             game.update(total_rew, zk, update_theta=ut)  # finally update everything
 
         for i in range(N_games_test):
