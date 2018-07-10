@@ -12,8 +12,9 @@ import os
 
 # Based on Policy Gradients with variance Related Risk Criteria
 
-ROAD_W = 12
-ROAD_H = 60
+ROAD_W = 6 # min value 6
+ROAD_H = 30
+ZOOM = 5
 
 def clamp(n, smallest, largest):
     return max(smallest, min(n, largest))
@@ -29,12 +30,12 @@ class car:
 
     def coord(self, y):
         x0 = self.pos[0] - self.size[0]/2
-        y0 = ROAD_H - (self.pos[1] - y + 10)
+        y0 = ROAD_H - (self.pos[1] - y + int(ROAD_H/4))
         return int(x0), int(y0)
 
     def draw(self, display, y):
         x, y = self.coord(y)
-        pygame.draw.rect(display, self.color, (x*5,y*5,self.size[0]*5,self.size[1]*5))
+        pygame.draw.rect(display, self.color, (x*ZOOM,y*ZOOM,self.size[0]*ZOOM,self.size[1]*ZOOM))
 
 # # function plotting running average of vector vec, n specifies width of window
 # def plot_run_avg(vec, n, **kwargs):
@@ -49,8 +50,8 @@ class road:
         self.pole = np.zeros((length, width))
         self.width = width
         self.length = length
-        self.l2c = int(self.width/4)+1
-        self.l1c = int(3 * self.width / 4)-1
+        self.l2c = int(self.width/6) + 1
+        self.l1c = int(5 * self.width / 6)
         self.l2v = line2_vel
         self.l1v = line1_vel
         self.vel = np.linspace(self.l1v, self.l2v, self.l1c - self.l2c)
@@ -62,12 +63,12 @@ class Road_game:
         self.road = road(ROAD_W, ROAD_H, 6, 8)
         self.car_size = [ROAD_W/5, 2*ROAD_W/5]
 
-        self.goal = 2000
+        self.goal = 100
 
         self.state_length = self.road.pole.shape[0] * self.road.pole.shape[1]
 
         pygame.init()
-        self.DISPLAY = pygame.display.set_mode((ROAD_W*5, ROAD_H*5), 0, 32)
+        self.DISPLAY = pygame.display.set_mode((ROAD_W*ZOOM, ROAD_H*ZOOM), 0, 32)
         pygame.display.set_caption('risk-aware-rl')
 
         self.car = None
@@ -102,7 +103,7 @@ class Road_game:
 
     def goal_reached(self):
         if self.car.pos[1] >= self.goal:
-            print('goal reached')
+            # print('goal reached')
             return True
         return False
 
@@ -126,7 +127,7 @@ class Road_game:
         return d_v
 
     # function plays one game, computes total reward and zk along trajectory
-    def play_one(self, seed=None):
+    def play_one(self, seed=None, save=False):
         total_rew = 0.0
         self.init_game(seed=seed)
 
@@ -141,10 +142,10 @@ class Road_game:
             total_rew += rew
             print('\rVelocity: {}'.format(self.car.v), end='')
             time.sleep(0.1)
-        if not self.collision():
-            np.save('trajectories_rand_big/traj_{}.npy'.format(int(datetime.now().timestamp())), s_a_pairs)
-        elif np.array(s_a_pairs).shape[0]>80:
-            np.save('trajectories_rand_big/traj_{}.npy'.format(int(datetime.now().timestamp())), s_a_pairs[:-10])
+        if not self.collision() and save:
+            np.save('trajectories_all/trajectories_rand_big/traj_{}.npy'.format(int(datetime.now().timestamp())), s_a_pairs)
+        elif np.array(s_a_pairs).shape[0]>80 and save:
+            np.save('trajectories_all/trajectories_rand_big/traj_{}.npy'.format(int(datetime.now().timestamp())), s_a_pairs[:-10])
         return total_rew
 
     def replay(self, traj):
@@ -182,7 +183,7 @@ class Road_game:
     def render(self):
 
         self.DISPLAY.fill(THECOLORS.get('white'))
-        pygame.draw.rect(self.DISPLAY, THECOLORS.get('grey'), (0, 0, ROAD_W*5, ROAD_H*5))
+        pygame.draw.rect(self.DISPLAY, THECOLORS.get('grey'), (0, 0, ROAD_W*ZOOM, ROAD_H*ZOOM))
 
         for v in self.ov:
             v.draw(self.DISPLAY, self.car.pos[1])
@@ -194,7 +195,7 @@ class Road_game:
         bluepx = np.array(bluepx)
         bluepx[bluepx == 190] = 0
         bluepx[bluepx == 255] = 1
-        self.road.pole = bluepx[::5, ::5]
+        self.road.pole = bluepx[::ZOOM, ::ZOOM]
 
         quit_ = False
         for event in pygame.event.get():
@@ -209,7 +210,7 @@ class Road_game:
         self.dist = d_v.copy()
 
         if (self.car.pos[0] > self.road.l2c and d_v[0] == -1) or (self.car.pos[0] < self.road.l1c and d_v[0] == 1):
-            self.car.pos[0] += 2*d_v[0]
+            self.car.pos[0] += d_v[0]
 
         # self.car.v = self.road.vel[clamp(self.road.l1c - self.car.pos[0], 0, len(self.road.vel)-1)]
         if 0 < self.car.v < 16:
@@ -219,11 +220,11 @@ class Road_game:
 
         if self.collision():
             self.game_over = True
-            return -300
+            return -10
         if self.goal_reached():
             self.game_over = True
-            return 30
-        return -0.01
+            return 1
+        return 0.1
 
     def update_game(self):
         for v in self.ov:
