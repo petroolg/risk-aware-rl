@@ -10,8 +10,6 @@ from datetime import datetime
 import os
 # os.environ["SDL_VIDEODRIVER"] = "dummy"
 
-# Based on Policy Gradients with variance Related Risk Criteria
-
 ROAD_W = 6 # min value 6
 ROAD_H = 30
 ZOOM = 5
@@ -37,14 +35,6 @@ class car:
         x, y = self.coord(y)
         pygame.draw.rect(display, self.color, (x*ZOOM,y*ZOOM,self.size[0]*ZOOM,self.size[1]*ZOOM))
 
-# # function plotting running average of vector vec, n specifies width of window
-# def plot_run_avg(vec, n, **kwargs):
-#     p = []
-#     vec = np.array(vec)
-#     for i in range(len(vec)):
-#         p.append(np.mean(vec[int(max(0, i - n/2)) : int(min(i+n/2, len(vec)-1))]))
-#     plt.plot(p, **kwargs)
-
 class road:
     def __init__(self, width, length, line1_vel, line2_vel):
         self.pole = np.zeros((length, width))
@@ -63,7 +53,7 @@ class Road_game:
         self.road = road(ROAD_W, ROAD_H, 6, 8)
         self.car_size = [ROAD_W/5, 2*ROAD_W/5]
 
-        self.goal = 100
+        self.goal = 400
 
         self.state_length = self.road.pole.shape[0] * self.road.pole.shape[1]
 
@@ -195,7 +185,7 @@ class Road_game:
         bluepx = np.array(bluepx)
         bluepx[bluepx == 190] = 0
         bluepx[bluepx == 255] = 1
-        self.road.pole = bluepx[::ZOOM, ::ZOOM]
+        self.road.pole = bluepx[1::ZOOM, 1::ZOOM]
 
         quit_ = False
         for event in pygame.event.get():
@@ -241,7 +231,7 @@ def manual_control():
 
     while True:
         total_rew = game.play_one()
-        print(total_rew)
+        print('\n{:.2f}\n'.format(total_rew))
 
 def replay_game(traj):
     game = Road_game()

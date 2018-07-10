@@ -16,27 +16,22 @@ class Q_approx:
         self.sa_pairs = tf.placeholder(tf.float64, (None, xd), name='sa_pairs')
         self.target = tf.placeholder(tf.float64, (None, 1), name='target')
 
-        self.weight1 = tf.Variable(tf.random_normal((xd,20),stddev=0.5,dtype=tf.float64))
-        self.weight2 = tf.Variable(tf.random_normal((20, 10),stddev=0.5,dtype=tf.float64))
-        self.weight3 = tf.Variable(tf.random_normal((10, 1),stddev=0.5,dtype=tf.float64))
-        self.bias1 = tf.Variable(tf.random_normal((1, 20),stddev=0.5,dtype=tf.float64))
-        self.bias2 = tf.Variable(tf.random_normal((1,10),stddev=0.5,dtype=tf.float64))
-        self.bias3 = tf.Variable(tf.random_normal((1,),stddev=0.5,dtype=tf.float64))
+        self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
-        self.Q0 = tf.nn.relu(tf.matmul(self.sa_pairs, self.weight1) + self.bias1)
-        self.Q1 = tf.nn.relu(tf.matmul(self.Q0, self.weight2) + self.bias2)
-        self.Q = (tf.matmul(self.Q1, self.weight3) + self.bias3)
+        with tf.variable_scope('Q_function'):
+            self.Q0 = tf.layers.dense(self.sa_pairs,20, activation=tf.nn.relu, name='Q0')
+            self.Q1 = tf.layers.dense(self.Q0,10, activation=tf.nn.relu, name='Q1')
+            self.Q = tf.layers.dense(self.Q1,1, name='Q')
 
         self.cost = tf.reduce_mean(tf.squared_difference(self.Q, self.target))
         self.optimizer = tf.train.AdamOptimizer(learning_rate=0.01)
-        self.train_op = self.optimizer.minimize(self.cost)
+        self.train_op = self.optimizer.minimize(self.cost, global_step=self.global_step)
 
-        tf.summary.histogram('weight1', self.weight1)
-        tf.summary.histogram('weight2', self.weight2)
-        tf.summary.histogram('weight3', self.weight3)
-        tf.summary.histogram('bias1', self.bias1)
-        tf.summary.histogram('bias2', self.bias2)
-        tf.summary.histogram('bias3', self.bias3)
+        vars = tf.trainable_variables(scope='Q_function')
+
+        for var in vars:
+            tf.summary.histogram(var.name, var)
+        tf.summary.histogram("activations", self.Q)
         tf.summary.scalar('cost', self.cost)
 
         self.sess = tf.Session()
@@ -60,12 +55,25 @@ class Q_approx:
         # d = self.sess.run(tf.square(self.Q - self.target), feed_dict={self.sa_pairs:np.atleast_2d(sa_pairs),  self.target: np.atleast_2d(target)})
         # prediction = self.sess.run(self.Q, feed_dict={self.sa_pairs:np.atleast_2d(sa_pairs)})
 
-        summary, _ = self.sess.run([self.merged, self.train_op], feed_dict={self.sa_pairs: np.atleast_2d(sa_pairs), self.target: np.atleast_2d(target)})
-        self.train_writer.add_summary(summary)
+        global_step, summary, _ = self.sess.run([self.global_step, self.merged, self.train_op], feed_dict={self.sa_pairs: np.atleast_2d(sa_pairs), self.target: np.atleast_2d(target)})
+
 
     def predict(self, sa_pairs):
         # q = self.sess.run(self.Q0, feed_dict={self.sa_pairs:np.atleast_2d(sa_pairs)})
         return self.sess.run(self.Q, feed_dict={self.sa_pairs:np.atleast_2d(sa_pairs)})
+
+    def add_summary(self, sa_pairs, target, total_rews, collisions):
+
+        global_step, summary = self.sess.run([self.global_step, self.merged],
+                                                feed_dict={self.sa_pairs: np.atleast_2d(sa_pairs),
+                                                           self.target: np.atleast_2d(target)})
+        self.train_writer.add_summary(summary, global_step=global_step)
+
+        summary = tf.Summary()
+        summary.value.add(tag='Total reward', simple_value=np.mean(total_rews))
+        summary.value.add(tag='Collisions', simple_value=np.mean(collisions))
+        self.train_writer.add_summary(summary, global_step=global_step)
+
 
 def softmax(vec):
     return np.exp(vec) / np.sum(np.exp(vec))
@@ -73,7 +81,7 @@ def softmax(vec):
 def play_game(game, model):
 
     sa_pairs, targets = [], []
-    total_rews = []
+    total_rews, collisions = [], []
 
     for i in range(10):
         game.init_game(seed=None)
@@ -100,19 +108,16 @@ def play_game(game, model):
             sa_pairs.append(cur_sa)
             targets.append(trgt)
         total_rews.append(total_rew)
+        collisions.append(game.collision())
 
-        summary = tf.Summary()
-        summary.value.add(tag='Total reward', simple_value=total_rew)
-        model.train_writer.add_summary(summary)
-        model.train_writer.flush()
+    model.fit(sa_pairs, np.array(targets)[np.newaxis].T)
+    model.add_summary(sa_pairs, np.array(targets)[np.newaxis].T, total_rews, collisions)
 
     game.init_game(seed=None)
     np.random.seed(None)
     total_rew = 0
     s_a_next = np.hstack((np.tile([game.state.copy()], (9, 1)), np.eye(9)))
     print(model.predict(s_a_next))
-
-    model.fit(sa_pairs, np.array(targets)[np.newaxis].T)
 
     return total_rews
 
