@@ -3,15 +3,18 @@ import numpy as np
 from simple_car_game import *
 from pdb import set_trace
 from imitation_agent import run_avg
-
+from model import Model
 import matplotlib
 matplotlib.use("Agg")
 from matplotlib import pyplot as plt
 import time
+import pickle
 
 class Q_approx:
 
     def __init__(self, xd):
+
+        self.save_path = 'graphs/risk_metric/model'
 
         self.sa_pairs = tf.placeholder(tf.float64, (None, xd), name='sa_pairs')
         self.target = tf.placeholder(tf.float64, (None, 1), name='target')
@@ -38,7 +41,8 @@ class Q_approx:
 
         self.merged = tf.summary.merge_all()
         self.train_writer = tf.summary.FileWriter('graphs/risk_metric/run{}_{}'.format(str(datetime.date(datetime.now())), str(datetime.time(datetime.now()))[:8]), self.sess.graph)
-
+        self.saver = tf.train.Saver()
+        self.saver.restore(self.sess, self.save_path)
 
         init = tf.global_variables_initializer()
         self.sess.run(init)
@@ -74,11 +78,14 @@ class Q_approx:
         summary.value.add(tag='Collisions', simple_value=np.mean(collisions))
         self.train_writer.add_summary(summary, global_step=global_step)
 
+    def save_session(self):
+        self.saver.save(self.sess, self.save_path)
+
 
 def softmax(vec):
     return np.exp(vec) / np.sum(np.exp(vec))
 
-def play_game(game, model):
+def play_game(game, model, transition_model:Model):
 
     sa_pairs, targets = [], []
     total_rews, collisions = [], []
@@ -107,6 +114,7 @@ def play_game(game, model):
             trgt = rew+0.9*np.max(s_a_next)
             sa_pairs.append(cur_sa)
             targets.append(trgt)
+            transition_model.add_prob(cur_sa[:-9], idx, game.state.copy(), rew)
         total_rews.append(total_rew)
         collisions.append(game.collision())
 
@@ -125,13 +133,20 @@ def play_game(game, model):
 
 if __name__ == '__main__':
     game = Road_game()
+    transition_model = Model()
+    transition_model.transition_model = pickle.load(open('trans_model.pckl', 'rb'))
     model = Q_approx(190)
     tot_rew = []
 
     for i in range(10000):
-        total_rew = play_game(game, model)
+        total_rew = play_game(game, model, transition_model)
         tot_rew += total_rew
         print(i)
+        if i%10==0:
+            with open('trans_model.pckl', 'wb') as file:
+                pickle.dump(transition_model,file)
+            model.save_session()
+
         # plt.plot(run_avg(tot_rew,bin=300))
         # plt.savefig('fig.png')
         # plt.close()

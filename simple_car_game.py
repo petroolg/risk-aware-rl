@@ -7,7 +7,10 @@ import pygame
 from pygame import QUIT, K_LEFT, K_RIGHT, K_DOWN, K_UP
 from pygame.colordict import THECOLORS
 from datetime import datetime
+from model import Model
+import sys
 import os
+import pickle
 # os.environ["SDL_VIDEODRIVER"] = "dummy"
 
 ROAD_W = 6 # min value 6
@@ -138,6 +141,26 @@ class Road_game:
             np.save('trajectories_all/trajectories_rand_big/traj_{}.npy'.format(int(datetime.now().timestamp())), s_a_pairs[:-10])
         return total_rew
 
+
+    # function plays one game, computes total reward and zk along trajectory
+    def play_one_learn_model(self, model:Model, seed=None):
+        total_rew = 0.0
+        self.init_game(seed=seed)
+
+        s_a_pairs = []
+
+        while not self.game_over:
+            # rew, zk = self.auto_move(zk)
+            st = self.state.copy()
+            d_v = self.process_keys()
+            s_a_pairs.append(np.hstack((st,d_v)))
+            rew = self.move(d_v)
+            model.add_prob(st,d_v,self.state.copy(),rew)
+            total_rew += rew
+            print('\rVelocity: {}'.format(self.car.v), end='')
+            time.sleep(0.1)
+        return total_rew
+
     def replay(self, traj):
         self.init_game()
         i = 0
@@ -213,7 +236,7 @@ class Road_game:
             return -10
         if self.goal_reached():
             self.game_over = True
-            return 1
+            # return 1
         return 0.1
 
     def update_game(self):
@@ -238,6 +261,16 @@ def replay_game(traj):
     game.replay(traj)
 
 
+def learn_model():
+    game = Road_game()  # instance of a game
+    model = Model()
+    while True:
+        total_rew = game.play_one_learn_model(model)
+        print('\n{:.2f}\n'.format(total_rew))
+        print("size of model in bytes:", sys.getsizeof(pickle.dumps(model)))
+
+
 if __name__ == '__main__':
     # replay_game(np.load('trajectories/traj_1527959902.npy'))
-    manual_control()
+    # manual_control()
+    learn_model()
