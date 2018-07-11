@@ -1,8 +1,11 @@
 import numpy as np
-from matplotlib import pyplot as plt
+import hashlib
+import sys
+
+def hash18(val):
+    return int(hashlib.sha1(val).hexdigest(), 16) % (sys.maxsize * 2) - sys.maxsize
 
 class Model:
-
 
     def __init__(self):
         # structure: {s0:
@@ -19,11 +22,13 @@ class Model:
         #
         self.transition_model = {}
 
+    def get(self, s, default):
+        return self.transition_model.get(hash18(np.array(s).astype(int).tobytes()), default)
 
     def add_prob(self, s_raw, a, s_prime_raw, reward):
 
-        s = hash(np.array(s_raw).tobytes())
-        s_prime = hash(np.array(s_prime_raw).tobytes())
+        s = hash18(np.array(s_raw).astype(int).tobytes())
+        s_prime = hash18(np.array(s_prime_raw).astype(int).tobytes())
 
         if not self.transition_model.get(s,{}):
             self.transition_model[s] = {}
@@ -34,11 +39,5 @@ class Model:
         else:
             if self.transition_model[s][a][s_prime][1] != reward:
                 print("Reward doesnt match!", self.transition_model[s][a][s_prime][1], reward)
-                plt.figure()
-                plt.imshow(s_raw[:-1].reshape(6,30))
-                plt.figure()
-                plt.imshow(s_prime_raw[:-1].reshape(6,30))
-                plt.show()
-                plt.waitforbuttonpress()
         self.transition_model[s][a][s_prime][0] += 1
         self.transition_model[s][a][s_prime][1] = reward

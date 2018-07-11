@@ -231,7 +231,6 @@ def sample_trajectories(game, model):
 
         s_a_pairs = []
         total_rew = 0
-        np.random.seed(None)
         t = 0
         while not game.game_over and t < 400:
             # rew, zk = game.auto_move(zk)

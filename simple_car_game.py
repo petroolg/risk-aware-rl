@@ -4,6 +4,7 @@ import pygame
 # import matplotlib
 # matplotlib.use('TkAgg')
 # from matplotlib import pyplot as plt
+from matplotlib import animation
 from pygame import QUIT, K_LEFT, K_RIGHT, K_DOWN, K_UP
 from pygame.colordict import THECOLORS
 from datetime import datetime
@@ -11,7 +12,7 @@ from model import Model
 import sys
 import os
 import pickle
-# os.environ["SDL_VIDEODRIVER"] = "dummy"
+os.environ["SDL_VIDEODRIVER"] = "dummy"
 
 ROAD_W = 6 # min value 6
 ROAD_H = 30
@@ -56,7 +57,8 @@ class Road_game:
         self.road = road(ROAD_W, ROAD_H, 6, 8)
         self.car_size = [ROAD_W/5, 2*ROAD_W/5]
 
-        self.goal = 400
+        self.step = 0
+        self.goal = 70
 
         self.state_length = self.road.pole.shape[0] * self.road.pole.shape[1]
 
@@ -95,7 +97,7 @@ class Road_game:
         return False
 
     def goal_reached(self):
-        if self.car.pos[1] >= self.goal:
+        if self.step >= self.goal:
             # print('goal reached')
             return True
         return False
@@ -143,7 +145,7 @@ class Road_game:
 
 
     # function plays one game, computes total reward and zk along trajectory
-    def play_one_learn_model(self, model:Model, seed=None):
+    def play_one_learn_model(self, model:Model, seed=None, save=False):
         total_rew = 0.0
         self.init_game(seed=seed)
 
@@ -152,29 +154,26 @@ class Road_game:
         while not self.game_over:
             # rew, zk = self.auto_move(zk)
             st = self.state.copy()
-            d_v = self.process_keys()
+            # d_v = self.process_keys()
+            idx = np.random.choice(range(9))
+            d_v = self.actios[idx]
             s_a_pairs.append(np.hstack((st,d_v)))
             rew = self.move(d_v)
-            model.add_prob(st,d_v,self.state.copy(),rew)
+            model.add_prob(st,self.actios.index(list(d_v)),self.state.copy(),rew)
             total_rew += rew
             print('\rVelocity: {}'.format(self.car.v), end='')
-            time.sleep(0.1)
+            # time.sleep(0.15)
+        if not self.collision() and save:
+            np.save('trajectories_all/trajectories60x30/traj_{}.npy'.format(int(datetime.now().timestamp())), s_a_pairs)
+        elif np.array(s_a_pairs).shape[0]>30 and save:
+            np.save('trajectories_all/trajectories60x30/traj_{}.npy'.format(int(datetime.now().timestamp())), s_a_pairs[:-10])
         return total_rew
-
-    def replay(self, traj):
-        self.init_game()
-        i = 0
-        for t in traj:
-            rew = self.move(t[-2:])
-            print('\rVelocity: {}'.format(self.car.v), end='')
-            time.sleep(0.15)
-            i+=1
-
 
     # initialization function, chooses state randomly
     def init_game(self, seed):
         self.game_over = False
         self.ov = []
+        self.step = 0
 
         np.random.seed(seed)
 
@@ -182,16 +181,17 @@ class Road_game:
         car_dists = np.arange(int(self.road.width/10 + self.car_size[1]),self.road.width*7,7)
         for i in range(120):
             self.ov.append(car([self.road.l2c, pos1], self.car_size,  self.road.l2v))
-            if not int(self.road.length/2 - 3*self.car_size[1]) < pos2 < int(self.road.length/2 + 3*self.car_size[1]):
+            if not int(-3*self.car_size[1]) < pos2 < int(3*self.car_size[1]):
                 self.ov.append(car([self.road.l1c, pos2], self.car_size,  self.road.l1v))
             pos1 += np.random.choice(car_dists)
             pos2 += np.random.choice(car_dists)
         # print(pos1,pos2)
 
-        pos = [self.road.l1c, int(self.road.length/2)]
+        pos = [self.road.l1c, 0]
         self.car = car(pos, self.car_size, self.road.l1v)
         self.camera = [self.car.pos[1]]
         self.render()
+        np.random.seed(None)
 
     def render(self):
 
@@ -208,7 +208,7 @@ class Road_game:
         bluepx = np.array(bluepx)
         bluepx[bluepx == 190] = 0
         bluepx[bluepx == 255] = 1
-        self.road.pole = bluepx[1::ZOOM, 1::ZOOM]
+        self.road.pole = bluepx[1::ZOOM, ::ZOOM]
 
         quit_ = False
         for event in pygame.event.get():
@@ -219,6 +219,8 @@ class Road_game:
 
 
     def move(self, d_v):
+
+        self.step += 1
 
         self.dist = d_v.copy()
 
@@ -237,6 +239,7 @@ class Road_game:
         if self.goal_reached():
             self.game_over = True
             # return 1
+        # return 1.0/self.goal
         return 0.1
 
     def update_game(self):
@@ -257,20 +260,38 @@ def manual_control():
         print('\n{:.2f}\n'.format(total_rew))
 
 def replay_game(traj):
-    game = Road_game()
-    game.replay(traj)
+    fig = plt.figure()
 
+    def f(i):
+        return traj[i, :-3].reshape((ROAD_W, ROAD_H)).T
+
+    ims = []
+    for i in range(len(traj)):
+        im = plt.imshow(f(i), animated=True)
+        ims.append([im])
+
+    ani = animation.ArtistAnimation(fig, ims, interval=100, blit=True,
+                                    repeat_delay=10000, repeat=False, )
+
+    plt.show()
 
 def learn_model():
     game = Road_game()  # instance of a game
+    # model = pickle.load(open('trans_model.pckl', 'rb'))
     model = Model()
+    seeds = [17,19,23,29,31,37,41,43,47,53]
     while True:
-        total_rew = game.play_one_learn_model(model)
+        seed = np.random.choice(seeds)
+        print(seed)
+        total_rew = game.play_one_learn_model(model, seed=seed)
         print('\n{:.2f}\n'.format(total_rew))
-        print("size of model in bytes:", sys.getsizeof(pickle.dumps(model)))
+        # print("size of model in bytes:", sys.getsizeof(pickle.dumps(model)))
+        with open('trans_model.pckl', 'wb') as file:
+            pickle.dump(model, file)
 
 
 if __name__ == '__main__':
-    # replay_game(np.load('trajectories/traj_1527959902.npy'))
+    # for traj in os.listdir('trajectories_all/trajectories60x30'):
+    #     replay_game(np.load('trajectories_all/trajectories60x30/' + traj))
     # manual_control()
     learn_model()
