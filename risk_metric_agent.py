@@ -10,6 +10,7 @@ from model import Model, hash18
 import time
 import pickle
 import math
+import atexit
 
 def risk_adjusted_utility(trans_model, s, a, l):
     mtx = np.atleast_2d(list(trans_model.get(s, {}).get(a, {}).values())).astype(float)
@@ -29,7 +30,7 @@ class Q_approx:
 
     def __init__(self, xd, name='Risk-indifferent'):
 
-        self.save_path = 'graphs/risk_metric/model/' + name
+        self.save_path = 'graphs/risk_metric/model/' + name + '.ckpt'
 
         self.sa_pairs = tf.placeholder(tf.float64, (None, xd), name='sa_pairs')
         self.target = tf.placeholder(tf.float64, (None, 1), name='target')
@@ -37,8 +38,8 @@ class Q_approx:
         self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
         with tf.variable_scope('Q_function'):
-            self.Q0 = tf.layers.dense(self.sa_pairs, 20, activation=tf.nn.relu, name='Q0')
-            self.Q1 = tf.layers.dense(self.Q0, 10, activation=tf.nn.relu, name='Q1')
+            self.Q0 = tf.layers.dense(self.sa_pairs, 60, activation=tf.nn.leaky_relu, name='Q0')
+            self.Q1 = tf.layers.dense(self.Q0, 30, activation=tf.nn.leaky_relu, name='Q1')
             self.Q = tf.layers.dense(self.Q1, 1, name='Q')
 
         self.cost = tf.reduce_mean(tf.squared_difference(self.Q, self.target))
@@ -57,10 +58,12 @@ class Q_approx:
         self.merged = tf.summary.merge_all()
         self.train_writer = tf.summary.FileWriter('graphs/risk_metric/run{}_{}'.format(str(datetime.date(datetime.now())), str(datetime.time(datetime.now()))[:8]), self.sess.graph)
         self.saver = tf.train.Saver()
-        # self.saver.restore(self.sess, self.save_path)
 
         init = tf.global_variables_initializer()
         self.sess.run(init)
+        # self.saver.restore(self.sess, self.save_path)
+
+        self.sess.graph.finalize()
 
     def fit(self, sa_pairs, target):
         global_step, summary, _ = self.sess.run([self.global_step, self.merged, self.train_op], feed_dict={self.sa_pairs: np.atleast_2d(sa_pairs), self.target: np.atleast_2d(target)})
@@ -98,7 +101,7 @@ def play_game(game, model, transition_model:Model, seed):
     sa_pairs, targets = [], []
     total_rews, collisions = [], []
 
-    for i in range(5):
+    for i in range(1):
         game.init_game(seed=seed)
         total_rew = 0
         while not game.game_over:
@@ -123,16 +126,12 @@ def play_game(game, model, transition_model:Model, seed):
             sa_pairs.append(cur_sa)
             targets.append(trgt)
             transition_model.add_prob(cur_sa[:-9], idx, game.state.copy(), rew)
+            # time.sleep(0.15)
         total_rews.append(total_rew)
         collisions.append(game.collision())
 
     model.fit(sa_pairs, np.array(targets)[np.newaxis].T)
     model.add_summary(sa_pairs, np.array(targets)[np.newaxis].T, total_rews, collisions)
-
-    game.init_game(seed=None)
-    total_rew = 0
-    s_a_next = np.hstack((np.tile([game.state.copy()], (9, 1)), np.eye(9)))
-    print(model.predict(s_a_next))
 
     return total_rews
 
@@ -147,12 +146,21 @@ if __name__ == '__main__':
 
     seeds = [17, 19, 23, 29, 31, 37, 41, 43, 47, 53]
 
+
+    def exit_handler():
+        with open('trans_model.pckl', 'wb') as file:
+            pickle.dump(transition_model,file)
+        model.save_session()
+
+
+    atexit.register(exit_handler)
+
     for i in range(10000):
         seed = np.random.choice(seeds)
         total_rew = play_game(game, model, transition_model, seed=seed)
         tot_rew += total_rew
         print(i)
-        if i%10==0:
+        if i%100==0:
             with open('trans_model.pckl', 'wb') as file:
                 pickle.dump(transition_model,file)
             model.save_session()
