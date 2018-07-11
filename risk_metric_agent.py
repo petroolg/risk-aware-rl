@@ -1,16 +1,11 @@
 import tensorflow as tf
-import numpy as np
 from simple_car_game import *
-from pdb import set_trace
-from imitation_agent import run_avg
 from model import Model, hash18
 # import matplotlib
 # matplotlib.use("Agg")
 # from matplotlib import pyplot as plt
 import time
 import pickle
-import math
-import atexit
 
 def risk_adjusted_utility(trans_model, s, a, l):
     mtx = np.atleast_2d(list(trans_model.get(s, {}).get(a, {}).values())).astype(float)
@@ -28,9 +23,9 @@ def risk_adjusted_utility(trans_model, s, a, l):
 
 class Q_approx:
 
-    def __init__(self, xd, name='Risk-indifferent'):
+    def __init__(self, xd, summary_name=''):
 
-        self.save_path = 'graphs/risk_metric/model/' + name + '.ckpt'
+        self.save_path = 'graphs/risk_metric/model/' + summary_name + '.ckpt'
 
         self.sa_pairs = tf.placeholder(tf.float64, (None, xd), name='sa_pairs')
         self.target = tf.placeholder(tf.float64, (None, 1), name='target')
@@ -56,7 +51,10 @@ class Q_approx:
         self.sess = tf.Session()
 
         self.merged = tf.summary.merge_all()
-        self.train_writer = tf.summary.FileWriter('graphs/risk_metric/run{}_{}'.format(str(datetime.date(datetime.now())), str(datetime.time(datetime.now()))[:8]), self.sess.graph)
+
+        summary_name = 'run{}_{}'.format(str(datetime.date(datetime.now())), str(datetime.time(datetime.now()))[:8]) + summary_name
+
+        self.train_writer = tf.summary.FileWriter('graphs/risk_metric/' + summary_name, self.sess.graph)
         self.saver = tf.train.Saver()
 
         init = tf.global_variables_initializer()
@@ -66,15 +64,21 @@ class Q_approx:
         self.sess.graph.finalize()
 
     def fit(self, sa_pairs, target):
-        global_step, summary, _ = self.sess.run([self.global_step, self.merged, self.train_op], feed_dict={self.sa_pairs: np.atleast_2d(sa_pairs), self.target: np.atleast_2d(target)})
+        global_step, summary, _ = self.sess.run([self.global_step, self.merged, self.train_op],
+                                                feed_dict={self.sa_pairs: np.atleast_2d(sa_pairs),
+                                                           self.target: np.atleast_2d(target)})
 
 
     def predict(self, sa_pairs):
         return self.sess.run(self.Q, feed_dict={self.sa_pairs:np.atleast_2d(sa_pairs)})
 
-    def predict_risk_adjusted_utility(self, sa_pairs, transition_model, p=0.001, lam=0.0):
+    def predict_risk_adjusted_utility(self, sa_pairs, transition_model, p, lam):
         Q = self.sess.run(self.Q, feed_dict={self.sa_pairs:np.atleast_2d(sa_pairs)})
-        risk = np.array([risk_adjusted_utility(transition_model, sa_pair[:-9], list(sa_pair[-9:]).index(1), lam) for sa_pair in sa_pairs])
+        risk = np.array([risk_adjusted_utility(transition_model,
+                                               sa_pair[:-9],
+                                               list(sa_pair[-9:]).index(1),
+                                               lam)
+                         for sa_pair in sa_pairs])
         return p*(1-risk) + (1-p)*Q.ravel()
 
     def add_summary(self, sa_pairs, target, total_rews, collisions):
@@ -96,7 +100,7 @@ class Q_approx:
 def softmax(vec):
     return np.exp(vec) / np.sum(np.exp(vec))
 
-def play_game(game, model, transition_model:Model, seed):
+def play_game(game, model, transition_model:Model, seed, risk_averse, p, l):
 
     sa_pairs, targets = [], []
     total_rews, collisions = [], []
@@ -106,11 +110,13 @@ def play_game(game, model, transition_model:Model, seed):
         total_rew = 0
         while not game.game_over:
             s_a = np.hstack((np.tile([game.state.copy()], (9,1)), np.eye(9)))
-            action_probs = model.predict(s_a)
-            action_probs_risk = model.predict_risk_adjusted_utility(s_a, transition_model)
-            idx = np.random.choice(range(9), p=softmax(action_probs_risk).ravel())
-            # idx = np.argmax(action_probs_risk)
-            # print(softmax(action_probs).ravel())
+
+            if risk_averse:
+                action_probs = model.predict_risk_adjusted_utility(s_a, transition_model, p, l)
+            else:
+                action_probs = model.predict(s_a)
+
+            idx = np.random.choice(range(9), p=softmax(action_probs).ravel())
             d_v = game.actios[idx]
 
             act_one_hot = np.zeros((9,))
@@ -139,28 +145,25 @@ def play_game(game, model, transition_model:Model, seed):
 
 if __name__ == '__main__':
     game = Road_game()
-    transition_model = pickle.load(open('trans_model.pckl', 'rb'))
-    # transition_model = Model()
-    model = Q_approx(190)
-    tot_rew = []
+    # transition_model = pickle.load(open('trans_model.pckl', 'rb'))
+    transition_model = Model()
 
     seeds = [17, 19, 23, 29, 31, 37, 41, 43, 47, 53]
+    hyper_p = np.linspace(0.001, 0.2, 5)
+    hyper_lambda = np.linspace(0.05, 0.95, 5)
+    hyperparams = list(zip(list(np.tile(hyper_p, len(hyper_lambda))), list(np.repeat(hyper_lambda, len(hyper_p)))))
 
-
-    def exit_handler():
-        with open('trans_model.pckl', 'wb') as file:
-            pickle.dump(transition_model,file)
-        model.save_session()
-
-
-    atexit.register(exit_handler)
-
-    for i in range(10000):
-        seed = np.random.choice(seeds)
-        total_rew = play_game(game, model, transition_model, seed=seed)
-        tot_rew += total_rew
-        print(i)
-        if i%100==0:
-            with open('trans_model.pckl', 'wb') as file:
-                pickle.dump(transition_model,file)
-            model.save_session()
+    for j, params in enumerate(hyperparams):
+        p, l = params
+        print('Executing run #{} for hyperparams p={}, lambda={}'.format(j, p, l))
+        model = Q_approx(190, summary_name='p_{:.2f}_lambda_{:.2f}'.format(p,l))
+        for i in range(5000):
+            seed = np.random.choice(seeds)
+            total_rew = play_game(game, model, transition_model, seed, risk_averse=True, p=p, l=l)
+            print('\r{}/5000'.format(i), end='')
+            if i%100==0:
+                with open('trans_model.pckl', 'wb') as file:
+                    pickle.dump(transition_model,file)
+                with open('trans_model.pckl.bk', 'wb') as file:
+                    pickle.dump(transition_model,file)
+                model.save_session()
