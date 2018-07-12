@@ -24,44 +24,44 @@ def risk_adjusted_utility(trans_model, s, a, l):
 class Q_approx:
 
     def __init__(self, xd, summary_name=''):
+        with tf.variable_scope('Q_train', reuse=tf.AUTO_REUSE):
+            self.save_path = 'graphs/risk_metric/model/' + summary_name + '/model.ckpt'
 
-        self.save_path = 'graphs/risk_metric/model/' + summary_name + '.ckpt'
+            self.sa_pairs = tf.placeholder(tf.float64, (None, xd), name='sa_pairs')
+            self.target = tf.placeholder(tf.float64, (None, 1), name='target')
 
-        self.sa_pairs = tf.placeholder(tf.float64, (None, xd), name='sa_pairs')
-        self.target = tf.placeholder(tf.float64, (None, 1), name='target')
+            self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
-        self.global_step = tf.Variable(0, name='global_step', trainable=False)
+            with tf.variable_scope('Q_function'):
+                self.Q0 = tf.layers.dense(self.sa_pairs, 60, activation=tf.nn.leaky_relu, name='Q0')
+                self.Q1 = tf.layers.dense(self.Q0, 30, activation=tf.nn.leaky_relu, name='Q1')
+                self.Q = tf.layers.dense(self.Q1, 1, name='Q')
 
-        with tf.variable_scope('Q_function'):
-            self.Q0 = tf.layers.dense(self.sa_pairs, 60, activation=tf.nn.leaky_relu, name='Q0')
-            self.Q1 = tf.layers.dense(self.Q0, 30, activation=tf.nn.leaky_relu, name='Q1')
-            self.Q = tf.layers.dense(self.Q1, 1, name='Q')
+            self.cost = tf.reduce_mean(tf.squared_difference(self.Q, self.target))
+            self.optimizer = tf.train.AdamOptimizer(learning_rate=0.01)
+            self.train_op = self.optimizer.minimize(self.cost, global_step=self.global_step)
 
-        self.cost = tf.reduce_mean(tf.squared_difference(self.Q, self.target))
-        self.optimizer = tf.train.AdamOptimizer(learning_rate=0.01)
-        self.train_op = self.optimizer.minimize(self.cost, global_step=self.global_step)
+            vars = tf.trainable_variables(scope='Q_function')
 
-        vars = tf.trainable_variables(scope='Q_function')
+            for var in vars:
+                tf.summary.histogram(var.name, var)
+            tf.summary.histogram("activations", self.Q)
+            tf.summary.scalar('cost', self.cost)
 
-        for var in vars:
-            tf.summary.histogram(var.name, var)
-        tf.summary.histogram("activations", self.Q)
-        tf.summary.scalar('cost', self.cost)
+            self.sess = tf.Session()
 
-        self.sess = tf.Session()
+            self.merged = tf.summary.merge_all()
 
-        self.merged = tf.summary.merge_all()
+            summary_name = 'run{}_{}'.format(str(datetime.date(datetime.now())), str(datetime.time(datetime.now()))[:8]) + summary_name
 
-        summary_name = 'run{}_{}'.format(str(datetime.date(datetime.now())), str(datetime.time(datetime.now()))[:8]) + summary_name
+            self.train_writer = tf.summary.FileWriter('graphs/risk_metric/' + summary_name, self.sess.graph)
+            self.saver = tf.train.Saver()
 
-        self.train_writer = tf.summary.FileWriter('graphs/risk_metric/' + summary_name, self.sess.graph)
-        self.saver = tf.train.Saver()
+            init = tf.global_variables_initializer()
+            self.sess.run(init)
+            # self.saver.restore(self.sess, self.save_path)
 
-        init = tf.global_variables_initializer()
-        self.sess.run(init)
-        # self.saver.restore(self.sess, self.save_path)
-
-        self.sess.graph.finalize()
+            # self.sess.graph.finalize()
 
     def fit(self, sa_pairs, target):
         global_step, summary, _ = self.sess.run([self.global_step, self.merged, self.train_op],
@@ -145,25 +145,27 @@ def play_game(game, model, transition_model:Model, seed, risk_averse, p, l):
 
 if __name__ == '__main__':
     game = Road_game()
-    # transition_model = pickle.load(open('trans_model.pckl', 'rb'))
-    transition_model = Model()
+    transition_model = pickle.load(open('trans_model.pckl', 'rb'))
+    # transition_model = Model()
 
     seeds = [17, 19, 23, 29, 31, 37, 41, 43, 47, 53]
     hyper_p = np.linspace(0.001, 0.2, 5)
     hyper_lambda = np.linspace(0.05, 0.95, 5)
     hyperparams = list(zip(list(np.tile(hyper_p, len(hyper_lambda))), list(np.repeat(hyper_lambda, len(hyper_p)))))
 
-    for j, params in enumerate(hyperparams):
+    for j, params in enumerate(hyperparams[6:]):
         p, l = params
         print('Executing run #{} for hyperparams p={}, lambda={}'.format(j, p, l))
-        model = Q_approx(190, summary_name='p_{:.2f}_lambda_{:.2f}'.format(p,l))
-        for i in range(5000):
+        model = Q_approx(190, summary_name='p_{:.2f}_lambda_{:.2f}'.format(p, l))
+
+        for i in range(3000):
             seed = np.random.choice(seeds)
             total_rew = play_game(game, model, transition_model, seed, risk_averse=True, p=p, l=l)
-            print('\r{}/5000'.format(i), end='')
-            if i%100==0:
+            print('\r{}/3000'.format(i), end='')
+            if i%500==0:
                 with open('trans_model.pckl', 'wb') as file:
                     pickle.dump(transition_model,file)
                 with open('trans_model.pckl.bk', 'wb') as file:
                     pickle.dump(transition_model,file)
                 model.save_session()
+        tf.reset_default_graph()
