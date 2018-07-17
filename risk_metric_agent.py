@@ -7,19 +7,17 @@ from model import Model, hash18
 import time
 import pickle
 
-def risk_adjusted_utility(trans_model, s, a, l):
-    mtx = np.atleast_2d(list(trans_model.get(s, {}).get(a, {}).values())).astype(float)
-    if len(mtx[0]) == 0:
+def risk_adjusted_utility(game, trans_model, s, a, l):
+    mtx = trans_model.get_distr(s,a,game)
+    if len(mtx) == 0:
         return 50
-    mtx[:, 0] = mtx[:, 0] / np.sum(mtx[:, 0])
     H = -mtx[:,0].T.dot(np.log(mtx[:,0]))
     ERS = {}
     for key in trans_model.get(s,{}).keys():
-        m = np.atleast_2d(list(trans_model.get(s,{}).get(key,{}).values())).astype(float)
-        m[:, 0] = m[:,0]/np.sum(m[:,0])
+        m = trans_model.get_distr(s, key, game)
         ERS[key] = m[:,0].T.dot(m[:,1])
     # return l*H - (1-l)*ERS[a]/np.max(list(ERS.values()))
-    return l * H - (1 - l) * ERS[a] / 0.1
+    return l * H - (1 - l) * ERS[a] / 0.5
 
 class Q_approx:
 
@@ -72,9 +70,9 @@ class Q_approx:
     def predict(self, sa_pairs):
         return self.sess.run(self.Q, feed_dict={self.sa_pairs:np.atleast_2d(sa_pairs)})
 
-    def predict_risk_adjusted_utility(self, sa_pairs, transition_model, p, lam):
+    def predict_risk_adjusted_utility(self, game, sa_pairs, transition_model, p, lam):
         Q = self.sess.run(self.Q, feed_dict={self.sa_pairs:np.atleast_2d(sa_pairs)})
-        risk = np.array([risk_adjusted_utility(transition_model,
+        risk = np.array([risk_adjusted_utility(game, transition_model,
                                                sa_pair[:-9],
                                                list(sa_pair[-9:]).index(1),
                                                lam)
@@ -112,7 +110,7 @@ def play_game(game, model, transition_model:Model, seed, risk_averse, p, l):
             s_a = np.hstack((np.tile([game.state.copy()], (9,1)), np.eye(9)))
 
             if risk_averse:
-                action_probs = model.predict_risk_adjusted_utility(s_a, transition_model, p, l)
+                action_probs = model.predict_risk_adjusted_utility(game, s_a, transition_model, p, l)
             else:
                 action_probs = model.predict(s_a)
 
@@ -131,7 +129,7 @@ def play_game(game, model, transition_model:Model, seed, risk_averse, p, l):
             trgt = rew+0.9*np.max(s_a_next)
             sa_pairs.append(cur_sa)
             targets.append(trgt)
-            transition_model.add_prob(cur_sa[:-9], idx, game.state.copy(), rew)
+            transition_model.add_prob(cur_sa[:-9], idx, game.state.copy(), game.event())
             # time.sleep(0.15)
         total_rews.append(total_rew)
         collisions.append(game.collision())
@@ -144,9 +142,13 @@ def play_game(game, model, transition_model:Model, seed, risk_averse, p, l):
 
 
 if __name__ == '__main__':
+
+
+    model_name = 'trans_model_safe.pckl'
+
     game = Road_game()
-    transition_model = pickle.load(open('trans_model.pckl', 'rb'))
-    # transition_model = Model()
+    # transition_model = pickle.load(open(model_name, 'rb'))
+    transition_model = Model()
 
     seeds = [17, 19, 23, 29, 31, 37, 41, 43, 47, 53]
     hyper_p = np.linspace(0.0, 0.2, 5)
@@ -163,9 +165,9 @@ if __name__ == '__main__':
             total_rew = play_game(game, model, transition_model, seed, risk_averse=True, p=p, l=l)
             print('\r{}/3000'.format(i), end='')
             if i%500==0:
-                with open('trans_model.pckl', 'wb') as file:
+                with open(model_name, 'wb') as file:
                     pickle.dump(transition_model,file)
-                with open('trans_model.pckl.bk', 'wb') as file:
+                with open(model_name + '.bk', 'wb') as file:
                     pickle.dump(transition_model,file)
                 model.save_session()
         tf.reset_default_graph()

@@ -72,6 +72,9 @@ class Road_game:
         self.n_cars_behind_l1 = 0
         self.n_cars_behind_l2 = 0
 
+        self.min_speed = 4
+        self.max_speed = 11
+
         self.state_length = self.road.pole.shape[0] * self.road.pole.shape[1]
 
         pygame.init()
@@ -99,6 +102,8 @@ class Road_game:
 
     @property
     def state(self):
+        vel = np.zeros(self.max_speed-self.min_speed+1)
+        vel[int(self.car.v - self.min_speed)] = 1.0
         return np.hstack((self.road.pole.reshape(self.state_length), self.car.v))
 
     def collision(self):
@@ -118,7 +123,7 @@ class Road_game:
         for v in self.ov:
             x1, y1 = v.pos - [(self.car_size[0] + self.car.safety_border[0]*2)/2, 0]
             a1, b1 = v.pos + [(self.car_size[0] + self.car.safety_border[0]*2)/2, self.car_size[1] + self.car.safety_border[1]*2]
-            if not (a < x1 or a1 < x or b < y1 or b1 < y):
+            if not (a <= x1 or a1 <= x or b <= y1 or b1 <= y):
                 # print('safe collision')
                 return True
         return False
@@ -187,14 +192,14 @@ class Road_game:
             d_v = self.actios[idx]
             s_a_pairs.append(np.hstack((st,d_v)))
             rew = self.move(d_v)
-            model.add_prob(st,self.actios.index(list(d_v)),self.state.copy(),rew)
+            model.add_prob(st,self.actios.index(list(d_v)),self.state.copy(),self.event())
             total_rew += rew
             print('\rVelocity: {}'.format(self.car.v), end='')
-            # time.sleep(0.15)
+            time.sleep(0.15)
         if not self.collision() and save:
-            np.save('trajectories_all/trajectories60x30/traj_{}.npy'.format(int(datetime.now().timestamp())), s_a_pairs)
+            np.save('trajectories_all/trajectories60x30safety/traj_{}.npy'.format(int(datetime.now().timestamp())), s_a_pairs)
         elif np.array(s_a_pairs).shape[0]>30 and save:
-            np.save('trajectories_all/trajectories60x30/traj_{}.npy'.format(int(datetime.now().timestamp())), s_a_pairs[:-10])
+            np.save('trajectories_all/trajectories60x30safety/traj_{}.npy'.format(int(datetime.now().timestamp())), s_a_pairs[:-10])
         return total_rew
 
     # initialization function, chooses state randomly
@@ -220,6 +225,7 @@ class Road_game:
             self.n_cars_behind_l2 += int(pos1<0)
             pos1 += np.random.choice(car_dists)
             pos2 += np.random.choice(car_dists)
+
 
         self.render()
         np.random.seed(None)
@@ -263,18 +269,17 @@ class Road_game:
 
     def event(self):
 
-        events = []
+        events = ()
 
         if self.collision():
             self.game_over = True
-            return ['collision']
+            return ('collision',)
 
         if self.safe_collision():
-            events.append('safe_collision')
+            events += ('safe_collision',)
 
         if self.goal_reached():
             self.game_over = True
-            events.append('goal_reached')
 
         n_cars_behind_l1 = 0
         n_cars_behind_l2 = 0
@@ -289,24 +294,28 @@ class Road_game:
         self.n_cars_behind_l2 = n_cars_behind_l2
 
         if reward1 > 0:
-            events.append('overtake_fast')
+            events += ('overtake_fast',)
         elif reward1 < 0:
-            events.append('pass_fast')
+            events += ('pass_fast',)
 
         if reward2 > 0:
-            events.append('overtake_slow')
+            events += ('overtake_slow',)
         elif reward2 < 0:
-            events.append('pass_slow')
+            events += ('pass_slow',)
 
         if not events:
-            events = ['nil']
+            events = ('nil',)
 
         return events
 
-    def reward(self):
+    def reward(self, events=None):
         r = 0
-        for e in self.event():
-            r += self.reward_dict[e]
+        if not events:
+            for e in self.event():
+                r += self.reward_dict[e]
+        else:
+            for e in events:
+                r += self.reward_dict[e]
         return r
 
     def move(self, d_v):
@@ -319,7 +328,7 @@ class Road_game:
             self.car.pos[0] += d_v[0]
 
         # self.car.v = self.road.vel[clamp(self.road.l1c - self.car.pos[0], 0, len(self.road.vel)-1)]
-        if 0 < self.car.v < 16:
+        if (self.car.v < self.max_speed and d_v[1] > 0) or (self.car.v > self.min_speed and d_v[1] < 0):
             self.car.v += d_v[1]
 
         self.update_game()
@@ -364,22 +373,21 @@ def replay_game(traj):
         ims.append([im])
 
     ani = animation.ArtistAnimation(fig, ims, interval=100, blit=True,
-                                    repeat_delay=10000, repeat=False, )
+                                    repeat_delay=10000, repeat=False)
 
     plt.show()
 
 def learn_model(seeds):
     game = Road_game()  # instance of a game
-    # model = pickle.load(open('trans_model.pckl', 'rb'))
+    # model = pickle.load(open('trans_model_safe.pckl', 'rb'))
     model = Model()
 
     while True:
-        seed = np.random.choice(seeds)
-        print(seed)
-        total_rew = game.play_one_learn_model(model, seed=seed)
+        # seed = np.random.choice(seeds)
+        # print(seed)
+        total_rew = game.play_one_learn_model(model, seed=None)
         print('\n{:.2f}\n'.format(total_rew))
-        # print("size of model in bytes:", sys.getsizeof(pickle.dumps(model)))
-        with open('trans_model.pckl', 'wb') as file:
+        with open('trans_model_safe.pckl', 'wb') as file:
             pickle.dump(model, file)
 
 
