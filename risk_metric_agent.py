@@ -149,11 +149,11 @@ if __name__ == '__main__':
     # transition_model = Model()
 
     seeds = [17, 19, 23, 29, 31, 37, 41, 43, 47, 53]
-    hyper_p = np.linspace(0.001, 0.2, 5)
+    hyper_p = np.linspace(0.0, 0.2, 5)
     hyper_lambda = np.linspace(0.05, 0.95, 5)
     hyperparams = list(zip(list(np.tile(hyper_p, len(hyper_lambda))), list(np.repeat(hyper_lambda, len(hyper_p)))))
 
-    for j, params in enumerate(hyperparams[6:]):
+    for j, params in enumerate(hyperparams):
         p, l = params
         print('Executing run #{} for hyperparams p={}, lambda={}'.format(j, p, l))
         model = Q_approx(190, summary_name='p_{:.2f}_lambda_{:.2f}'.format(p, l))
