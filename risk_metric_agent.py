@@ -147,8 +147,8 @@ if __name__ == '__main__':
     model_name = 'trans_model_safe.pckl'
 
     game = Road_game()
-    # transition_model = pickle.load(open(model_name, 'rb'))
-    transition_model = Model()
+    transition_model = pickle.load(open(model_name, 'rb'))
+    # transition_model = Model()
 
     seeds = [17, 19, 23, 29, 31, 37, 41, 43, 47, 53]
     hyper_p = np.linspace(0.0, 0.2, 5)
@@ -158,7 +158,7 @@ if __name__ == '__main__':
     for j, params in enumerate(hyperparams):
         p, l = params
         print('Executing run #{} for hyperparams p={}, lambda={}'.format(j, p, l))
-        model = Q_approx(190, summary_name='p_{:.2f}_lambda_{:.2f}'.format(p, l))
+        model = Q_approx(197, summary_name='p_{:.2f}_lambda_{:.2f}'.format(p, l))
 
         for i in range(3000):
             seed = np.random.choice(seeds)

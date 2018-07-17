@@ -104,7 +104,7 @@ class Road_game:
     def state(self):
         vel = np.zeros(self.max_speed-self.min_speed+1)
         vel[int(self.car.v - self.min_speed)] = 1.0
-        return np.hstack((self.road.pole.reshape(self.state_length), self.car.v))
+        return np.hstack((self.road.pole.reshape(self.state_length), vel))
 
     def collision(self):
         x, y = self.car.pos - [self.car_size[0]/2, 0]
