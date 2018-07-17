@@ -158,7 +158,7 @@ if __name__ == '__main__':
     for j, params in enumerate(hyperparams):
         p, l = params
         print('Executing run #{} for hyperparams p={}, lambda={}'.format(j, p, l))
-        model = Q_approx(197, summary_name='p_{:.2f}_lambda_{:.2f}'.format(p, l))
+        model = Q_approx(190, summary_name='p_{:.2f}_lambda_{:.2f}'.format(p, l))
 
         for i in range(3000):
             seed = np.random.choice(seeds)
