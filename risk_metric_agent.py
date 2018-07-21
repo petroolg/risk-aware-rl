@@ -1,6 +1,6 @@
 import tensorflow as tf
 from simple_car_game import *
-from model import Model, hash18
+from model import Model
 # import matplotlib
 # matplotlib.use("Agg")
 # from matplotlib import pyplot as plt
