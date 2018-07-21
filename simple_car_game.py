@@ -24,12 +24,12 @@ def clamp(n, smallest, largest):
 
 class car:
 
-    def __init__(self, pos, size, v):
+    def __init__(self, pos, size, v, color='blue'):
         self.pos = np.array(pos)
         self.size = size
         self.v = v
         self.safety_border = (1,1)
-        self.color = THECOLORS.get('blue')
+        self.color = THECOLORS.get(color)
 
 
     def coord(self, y):
@@ -210,7 +210,7 @@ class Road_game:
 
         np.random.seed(seed)
 
-        self.car = car([self.road.l1c, 0], self.car_size, self.road.l1v)
+        self.car = car([self.road.l1c, 0], self.car_size, self.road.l1v,color='green')
         self.camera = [self.car.pos[1]]
         self.n_cars_behind_l1 = 0
         self.n_cars_behind_l2 = 0
@@ -250,11 +250,15 @@ class Road_game:
         bluepx = np.array(bluepx).astype(int)
         redpx = pygame.surfarray.pixels_red(self.DISPLAY)
         redpx = np.array(redpx).astype(int)
+        greenpx = pygame.surfarray.pixels_green(self.DISPLAY)
+        greenpx = np.array(greenpx).astype(int)
+        greenpx[greenpx != 255] = 0
+        greenpx[greenpx == 255] = 1
         bluepx[bluepx != 255] = 0
         bluepx[bluepx == 255] = 1
         redpx[redpx != 255] = 0
         redpx[redpx == 255] = 1
-        self.road.pole = 2*bluepx[::ZOOM, ::ZOOM] + redpx[::ZOOM, ::ZOOM] - 1
+        self.road.pole = 2*bluepx[::ZOOM, ::ZOOM] + 2*greenpx[::ZOOM, ::ZOOM] + redpx[::ZOOM, ::ZOOM] - 1
 
         # plt.imshow(self.road.pole.reshape(ROAD_W, ROAD_H))
         # plt.colorbar()

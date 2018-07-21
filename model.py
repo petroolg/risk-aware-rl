@@ -26,15 +26,19 @@ class Model:
         return self.transition_model.get(np.array(s).astype(int).tobytes(), default)
 
     def get_distr(self, s, a, game):
-        s_dict = self.transition_model.get(np.array(s).astype(int).tobytes(), {})
+        if type(s) is np.ndarray or type(s) is list:
+            s = np.array(s).astype(int).tobytes()
+
+        s_dict = self.transition_model.get(s, {})
         a_dict = s_dict.get(a, {})
         if not a_dict:
-            return []
+            return [], []
         mtx = list(a_dict.values())
+        keys = list(a_dict.keys())
         freqs = np.array([v[0] for v in mtx])
         rews = np.array([game.reward(events=v[1]) for v in mtx])
 
-        return np.vstack((freqs/freqs.sum(), rews)).T
+        return np.vstack((freqs/freqs.sum(), rews)).T, keys
 
     def add_prob(self, s_raw, a, s_prime_raw, reward):
 

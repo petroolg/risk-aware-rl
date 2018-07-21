@@ -7,17 +7,7 @@ from model import Model, hash18
 import time
 import pickle
 
-def risk_adjusted_utility(game, trans_model, s, a, l):
-    mtx = trans_model.get_distr(s,a,game)
-    if len(mtx) == 0:
-        return 50
-    H = -mtx[:,0].T.dot(np.log(mtx[:,0]))
-    ERS = {}
-    for key in trans_model.get(s,{}).keys():
-        m = trans_model.get_distr(s, key, game)
-        ERS[key] = m[:,0].T.dot(m[:,1])
-    # return l*H - (1-l)*ERS[a]/np.max(list(ERS.values()))
-    return l * H - (1 - l) * ERS[a] / 0.5
+
 
 class Q_approx:
 
@@ -72,12 +62,13 @@ class Q_approx:
 
     def predict_risk_adjusted_utility(self, game, sa_pairs, transition_model, p, lam):
         Q = self.sess.run(self.Q, feed_dict={self.sa_pairs:np.atleast_2d(sa_pairs)})
-        risk = np.array([risk_adjusted_utility(game, transition_model,
+        risk = np.array([self.risk_adjusted_utility2(game, transition_model,
                                                sa_pair[:-9],
                                                list(sa_pair[-9:]).index(1),
                                                lam)
                          for sa_pair in sa_pairs])
-        return p*(1-risk) + (1-p)*Q.ravel()
+        riskn = risk/np.max(np.abs(risk)) * np.median(np.abs(Q))
+        return p*(1-riskn) + (1-p)*Q.ravel()
 
     def add_summary(self, sa_pairs, target, total_rews, collisions):
 
@@ -93,6 +84,41 @@ class Q_approx:
 
     def save_session(self):
         self.saver.save(self.sess, self.save_path)
+
+    def risk_adjusted_utility2(self, game, trans_model, s, a, l):
+        mtx, s_primes = trans_model.get_distr(s, a, game)
+
+        if len(mtx) == 0:
+            return 10
+
+        H = -mtx[:, 0].T.dot(np.log(mtx[:, 0]))
+
+        a_primes = []
+        for s_prime in s_primes:
+            s_a_next = np.hstack((np.tile([np.frombuffer(s_prime, dtype=int)], (9, 1)), np.eye(9)))
+            s_a_next = model.predict(s_a_next)
+            a_primes.append(np.argmax(s_a_next))
+
+        mtxs = [trans_model.get_distr(s_prime, a_prime, game)[0] for s_prime, a_prime in zip(s_primes, a_primes)]
+
+        Hs = [-m[:, 0].T.dot(np.log(m[:, 0])) if len(m) > 0 else 0.0 for m in mtxs]
+        ERs = [m[:, 0].T.dot(m[:, 1]) if len(m) > 0 else -2 for m in mtxs]
+
+        H2 = H + np.dot(Hs, mtx[:, 0])
+        ER2 = np.dot(mtx[:, 0], mtx[:, 1] + ERs)/0.5
+
+        return l * H2 - (1 - l) * ER2 / 0.5
+
+    def risk_adjusted_utility(self, game, trans_model, s, a, l):
+        mtx = trans_model.get_distr(s, a, game)
+
+        if len(mtx) == 0:
+            return 10
+
+        H = -mtx[:, 0].T.dot(np.log(mtx[:, 0]))
+        ER = mtx[:, 0].T.dot(mtx[:, 1])
+
+        return l * H - (1 - l) * ER / 0.5
 
 
 def softmax(vec):
@@ -151,8 +177,8 @@ if __name__ == '__main__':
     # transition_model = Model()
 
     seeds = [17, 19, 23, 29, 31, 37, 41, 43, 47, 53]
-    hyper_p = np.linspace(0.0, 0.2, 5)
-    hyper_lambda = np.linspace(0.05, 0.95, 5)
+    hyper_p = np.linspace(0.1, 0.6, 5)
+    hyper_lambda = np.linspace(0.05, 0.95, 3)
     hyperparams = list(zip(list(np.tile(hyper_p, len(hyper_lambda))), list(np.repeat(hyper_lambda, len(hyper_p)))))
 
     for j, params in enumerate(hyperparams):
@@ -160,11 +186,11 @@ if __name__ == '__main__':
         print('Executing run #{} for hyperparams p={}, lambda={}'.format(j, p, l))
         model = Q_approx(190, summary_name='p_{:.2f}_lambda_{:.2f}'.format(p, l))
 
-        for i in range(3000):
+        for i in range(8000):
             seed = np.random.choice(seeds)
             total_rew = play_game(game, model, transition_model, seed, risk_averse=True, p=p, l=l)
             print('\r{}/3000'.format(i), end='')
-            if i%500==0:
+            if i%1000==0:
                 with open(model_name, 'wb') as file:
                     pickle.dump(transition_model,file)
                 with open(model_name + '.bk', 'wb') as file:
