@@ -62,13 +62,15 @@ class Q_approx:
 
     def predict_risk_adjusted_utility(self, game, sa_pairs, transition_model, p, lam):
         Q = self.sess.run(self.Q, feed_dict={self.sa_pairs:np.atleast_2d(sa_pairs)})
-        risk = np.array([self.risk_adjusted_utility2(game, transition_model,
+
+        k = self.multi_step_distr(sa_pairs[0,:-9], 2, transition_model, game, 0.9, 2, defaurt_rew=-2)
+
+        risk = np.array([self.entropy_risk(game, transition_model,
                                                sa_pair[:-9],
                                                list(sa_pair[-9:]).index(1),
                                                lam)
                          for sa_pair in sa_pairs])
-        riskn = risk/np.max(np.abs(risk)) * np.median(np.abs(Q))
-        return p*(1-riskn) + (1-p)*Q.ravel()
+        return p*(1-risk) + (1-p)*Q.ravel()
 
     def add_summary(self, sa_pairs, target, total_rews, collisions):
 
@@ -85,40 +87,60 @@ class Q_approx:
     def save_session(self):
         self.saver.save(self.sess, self.save_path)
 
-    def risk_adjusted_utility2(self, game, trans_model, s, a, l):
+    def entropy_risk(self, game, trans_model, s, a, l, n=2):
+        prob, rews = self.multi_step_distr(s,a,trans_model, game, 0.9, n, -2)
+
+        H = -prob.dot(np.log(prob.T))
+        ER = prob.dot(rews.T)
+
+        risk = l * H - (1 - l) * ER / 0.5
+
+        return float(risk)
+
+    def multi_step_distr(self, s, a, trans_model, game, gamma, n_steps, defaurt_rew):
+        p, r = self.multi_step_distr_recursion(s, a, trans_model, game, gamma, 0, n_steps, defaurt_rew)
+
+        prob, rews = [], []
+
+        for rew in np.unique(r):
+            rews.append(rew)
+            prob.append(np.sum(p[r == rew]))
+
+        return np.atleast_2d(prob), np.atleast_2d(rews)
+
+    def multi_step_distr_recursion(self, s, a, trans_model, game, gamma, n, n_steps, defaurt_rew):
+
         mtx, s_primes = trans_model.get_distr(s, a, game)
 
-        if len(mtx) == 0:
-            return 10
+        if n == n_steps:
+            if len(mtx) == 0:
+                return np.array([[1.0]]), np.array([[defaurt_rew]])
+            else:
 
-        H = -mtx[:, 0].T.dot(np.log(mtx[:, 0]))
+                return mtx[:,0], mtx[:,1]
+        else:
+            next_p, next_r = np.array([[]]), np.array([[]])
+            if len(mtx) == 0:
+                next_p_s = [[1.0]]
+                next_r_s = [[defaurt_rew]]
 
-        a_primes = []
-        for s_prime in s_primes:
-            s_a_next = np.hstack((np.tile([np.frombuffer(s_prime, dtype=int)], (9, 1)), np.eye(9)))
-            s_a_next = model.predict(s_a_next)
-            a_primes.append(np.argmax(s_a_next))
+                next_p = np.append(next_p, next_p_s)
+                next_r = np.append(next_r, next_r_s)
+            else:
+                for i, s_prime in enumerate(s_primes):
+                    s_a_next = np.hstack((np.tile([np.frombuffer(s_prime, dtype=int)], (9, 1)), np.eye(9)))
+                    s_a_next = model.predict(s_a_next)
+                    a_prime = np.argmax(s_a_next)
 
-        mtxs = [trans_model.get_distr(s_prime, a_prime, game)[0] for s_prime, a_prime in zip(s_primes, a_primes)]
+                    p, r = self.multi_step_distr_recursion(s_prime,a_prime, transition_model, game, gamma, n+1, n_steps, defaurt_rew)
 
-        Hs = [-m[:, 0].T.dot(np.log(m[:, 0])) if len(m) > 0 else 0.0 for m in mtxs]
-        ERs = [m[:, 0].T.dot(m[:, 1]) if len(m) > 0 else -2 for m in mtxs]
+                    next_r_s = mtx[i,1]+gamma*r
+                    next_p_s = mtx[i,0]*p
+                    next_p = np.append(next_p, next_p_s)
+                    next_r = np.append(next_r, next_r_s)
 
-        H2 = H + np.dot(Hs, mtx[:, 0])
-        ER2 = np.dot(mtx[:, 0], mtx[:, 1] + ERs)/0.5
 
-        return l * H2 - (1 - l) * ER2 / 0.5
-
-    def risk_adjusted_utility(self, game, trans_model, s, a, l):
-        mtx = trans_model.get_distr(s, a, game)
-
-        if len(mtx) == 0:
-            return 10
-
-        H = -mtx[:, 0].T.dot(np.log(mtx[:, 0]))
-        ER = mtx[:, 0].T.dot(mtx[:, 1])
-
-        return l * H - (1 - l) * ER / 0.5
+        return next_p, next_r
 
 
 def softmax(vec):
@@ -176,7 +198,7 @@ if __name__ == '__main__':
     transition_model = pickle.load(open(model_name, 'rb'))
     # transition_model = Model()
 
-    seeds = [17, 19, 23, 29, 31, 37, 41, 43, 47, 53]
+    seeds = [23]
     hyper_p = np.linspace(0.1, 0.6, 5)
     hyper_lambda = np.linspace(0.05, 0.95, 3)
     hyperparams = list(zip(list(np.tile(hyper_p, len(hyper_lambda))), list(np.repeat(hyper_lambda, len(hyper_p)))))
@@ -188,6 +210,7 @@ if __name__ == '__main__':
 
         for i in range(8000):
             seed = np.random.choice(seeds)
+            print(seed)
             total_rew = play_game(game, model, transition_model, seed, risk_averse=True, p=p, l=l)
             print('\r{}/3000'.format(i), end='')
             if i%1000==0:
