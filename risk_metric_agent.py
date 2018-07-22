@@ -6,6 +6,7 @@ from model import Model
 # from matplotlib import pyplot as plt
 import time
 import pickle
+import scipy.interpolate
 
 
 
@@ -97,12 +98,39 @@ class Q_approx:
 
         return float(risk)
 
+    def mean_deviation_risk(self, game, trans_model, s, a, p, b, n=2):
+        prob, rews = self.multi_step_distr(s, a, trans_model, game, 0.9, n, -2)
+
+        ER = prob.dot(rews.T)
+        risk = ER + b * prob.dot((rews-ER)**p)**(1/p)
+
+        return float(risk)
+
+    def mean_semi_deviation_risk(self, game, trans_model, s, a, p, b, n=2):
+        prob, rews = self.multi_step_distr(s, a, trans_model, game, 0.9, n, -2)
+
+        ER = prob.dot(rews.T)
+        devs = np.array([d if d > 0 else d for d in rews-ER])
+        risk = ER + b * prob.dot(devs**p)**(1/p)
+
+        return float(risk)
+
+    def c_value_at_risk(self, game, trans_model, s, a, alpha, n=2):
+        prob, rews = self.multi_step_distr(s, a, trans_model, game, 0.9, n, -2)
+        distribution = scipy.interpolate.interp1d(np.cumsum(prob), rews, bounds_error=False,
+                                                  fill_value='extrapolate')
+        value_at_risk = distribution(alpha)
+        c_var = prob[rews<=value_at_risk].dot(rews[rews<=value_at_risk])
+
+        return c_var
+
+
     def multi_step_distr(self, s, a, trans_model, game, gamma, n_steps, defaurt_rew):
         p, r = self.multi_step_distr_recursion(s, a, trans_model, game, gamma, 0, n_steps, defaurt_rew)
 
         prob, rews = [], []
 
-        for rew in np.unique(r):
+        for rew in np.sort(np.unique(r)):
             rews.append(rew)
             prob.append(np.sum(p[r == rew]))
 
