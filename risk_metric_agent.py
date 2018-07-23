@@ -7,8 +7,9 @@ from model import Model
 import time
 import pickle
 import scipy.interpolate
+import multiprocessing
 
-
+global transition_model
 
 class Q_approx:
 
@@ -38,18 +39,14 @@ class Q_approx:
             tf.summary.scalar('cost', self.cost)
 
             self.sess = tf.Session()
-
             self.merged = tf.summary.merge_all()
-
             summary_name = 'run{}_{}'.format(str(datetime.date(datetime.now())), str(datetime.time(datetime.now()))[:8]) + summary_name
-
             self.train_writer = tf.summary.FileWriter('graphs/risk_metric/' + summary_name, self.sess.graph)
             self.saver = tf.train.Saver()
 
             init = tf.global_variables_initializer()
             self.sess.run(init)
             # self.saver.restore(self.sess, self.save_path)
-
             # self.sess.graph.finalize()
 
     def fit(self, sa_pairs, target):
@@ -58,19 +55,17 @@ class Q_approx:
                                                            self.target: np.atleast_2d(target)})
 
 
-    def predict(self, sa_pairs):
-        return self.sess.run(self.Q, feed_dict={self.sa_pairs:np.atleast_2d(sa_pairs)})
-
-    def predict_risk_adjusted_utility(self, game, sa_pairs, transition_model, p, lam):
+    def predict(self, sa_pairs, game, transition_model, **kwargs):
         Q = self.sess.run(self.Q, feed_dict={self.sa_pairs:np.atleast_2d(sa_pairs)})
 
-        risk = np.array([self.entropy_risk(game, transition_model,
-                                               sa_pair[:-9],
-                                               list(sa_pair[-9:]).index(1),
-                                               lam)
-                         for sa_pair in sa_pairs])
+        if kwargs.get('risk_metric', None):
+            risk = np.array([self.entropy_risk(game, transition_model, sa_pair[:-9], list(sa_pair[-9:]).index(1),
+                                               **kwargs)
+                             for sa_pair in sa_pairs])
 
-        return p*risk + (1 - p)*Q.ravel()
+            return kwargs['p']*risk + (1 - kwargs['p'])*Q.ravel()
+        else:
+            return Q.ravel()
 
     def add_summary(self, sa_pairs, target, total_rews, collisions):
 
@@ -87,42 +82,42 @@ class Q_approx:
     def save_session(self):
         self.saver.save(self.sess, self.save_path)
 
-    def entropy_risk(self, game, trans_model, s, a, l, n=2):
-        prob, rews = self.multi_step_distr(s,a,trans_model, game, 0.9, n, -2)
+    def entropy_risk(self, game, trans_model, s, a, **kwargs):
+
+        prob, rews = self.multi_step_distr(s,a,trans_model, game, 0.9, kwargs['n'], -2)
 
         H = -prob.dot(np.log(prob.T))
         ER = prob.dot(rews.T)
 
-        risk = l * H - (1 - l) * ER / 0.5
+        risk = kwargs['l'] * H - (1 - kwargs['l']) * ER / 0.5
 
         return 1.0 - float(risk)
 
-    def mean_deviation_risk(self, game, trans_model, s, a, p, b, n=2):
-        prob, rews = self.multi_step_distr(s, a, trans_model, game, 0.9, n, -2)
+    def mean_deviation_risk(self, game, trans_model, s, a, **kwargs):
+        prob, rews = self.multi_step_distr(s, a, trans_model, game, 0.9, kwargs['n'], -2)
 
         ER = prob.dot(rews.T)
-        risk = ER + b * prob.dot((rews-ER)**p)**(1/p)
+        risk = ER + kwargs['b'] * prob.dot((rews-ER)**kwargs['p'])**(1/kwargs['p'])
 
         return float(risk)
 
-    def mean_semi_deviation_risk(self, game, trans_model, s, a, p, b, n=2):
-        prob, rews = self.multi_step_distr(s, a, trans_model, game, 0.9, n, -2)
+    def mean_semi_deviation_risk(self, game, trans_model, s, a, **kwargs):
+        prob, rews = self.multi_step_distr(s, a, trans_model, game, 0.9, kwargs['n'], -2)
 
         ER = prob.dot(rews.T)
         devs = np.array([d if d > 0 else d for d in rews-ER])
-        risk = ER + b * prob.dot(devs**p)**(1/p)
+        risk = ER + kwargs['b'] * prob.dot(devs**kwargs['p'])**(1/kwargs['p'])
 
         return float(risk)
 
-    def c_value_at_risk(self, game, trans_model, s, a, alpha, n=2):
-        prob, rews = self.multi_step_distr(s, a, trans_model, game, 0.9, n, -2)
+    def c_value_at_risk(self, game, trans_model, s, a, **kwargs):
+        prob, rews = self.multi_step_distr(s, a, trans_model, game, 0.9, kwargs['n'], -2)
         distribution = scipy.interpolate.interp1d(np.cumsum(prob), rews, bounds_error=False,
                                                   fill_value='extrapolate')
-        value_at_risk = distribution(alpha)
+        value_at_risk = distribution(kwargs['alpha'])
         c_var = prob[rews<=value_at_risk].dot(rews[rews<=value_at_risk])
 
         return c_var
-
 
     def multi_step_distr(self, s, a, trans_model, game, gamma, n_steps, defaurt_rew):
         p, r = self.multi_step_distr_recursion(s, a, trans_model, game, gamma, 0, n_steps, defaurt_rew)
@@ -173,21 +168,18 @@ class Q_approx:
 def softmax(vec):
     return np.exp(vec) / np.sum(np.exp(vec))
 
-def play_game(game, model, transition_model:Model, seed, risk_averse, p, l):
+def play_game(game, model, transition_model, **kwargs):
 
     sa_pairs, targets = [], []
     total_rews, collisions = [], []
 
     for i in range(1):
-        game.init_game(seed=seed)
+        game.init_game(seed=kwargs.get('seed', None))
         total_rew = 0
         while not game.game_over:
             s_a = np.hstack((np.tile([game.state.copy()], (9,1)), np.eye(9)))
 
-            if risk_averse:
-                action_probs = model.predict_risk_adjusted_utility(game, s_a, transition_model, p, l)
-            else:
-                action_probs = model.predict(s_a)
+            action_probs = model.predict(s_a, game, transition_model, **kwargs)
 
             idx = np.random.choice(range(9), p=softmax(action_probs).ravel())
             d_v = game.actios[idx]
@@ -214,38 +206,35 @@ def play_game(game, model, transition_model:Model, seed, risk_averse, p, l):
 
     return total_rews
 
+def perform_experiment(**kwargs):
+
+    global transition_model
+    print('Executing run #{} for hyperparams p={}, lambda={}'.format(kwargs['j'], kwargs['p'], kwargs['l']))
+    model = Q_approx(190, summary_name='{}_{}_p_{:.2f}_lambda_{:.2f}'.format(kwargs['risk_metric'], kwargs['n_steps'], kwargs['p'], kwargs['l']))
+    seeds = [17, 19, 23, 29, 31, 37, 41, 43, 47, 53]
+
+    for i in range(8000):
+        seed = np.random.choice(seeds)
+        kwargs['seed'] = seed
+        total_rew = play_game(game, model, transition_model, **kwargs)
+        print('\r{}/3000'.format(i), end='')
+        if i % 1000 == 0:
+            model.save_session()
 
 
 if __name__ == '__main__':
-
 
     model_name = 'trans_model_safe.pckl'
 
     game = Road_game()
     transition_model = pickle.load(open(model_name, 'rb'))
-    # transition_model = Model()
 
-    seeds = [17, 19, 23, 29, 31, 37, 41, 43, 47, 53]
     hyper_p = np.linspace(0.1, 0.6, 3)
     hyper_lambda = np.linspace(0.05, 0.95, 3)
     risk_metrics = ['entropy_risk', 'mean_deviation', 'cvar']
-    hyperparams = list(zip(list(np.tile(hyper_p, len(hyper_lambda))), list(np.repeat(hyper_lambda, len(hyper_p)))))
-    n_steps = 2
+    hyperparams = [(0,0)] + list(zip(list(np.tile(hyper_p, len(hyper_lambda))), list(np.repeat(hyper_lambda, len(hyper_p)))))
+    hyperparams = [{'p': p, 'l':l, 'n_steps':2, 'risk_metric': risk_metrics[0]} for p, l in hyperparams]
 
-    for j, params in enumerate(hyperparams):
-        p, l = params
-        print('Executing run #{} for hyperparams p={}, lambda={}'.format(j, p, l))
-        model = Q_approx(190, summary_name='{}_{}_p_{:.2f}_lambda_{:.2f}'.format(risk_metrics[0], n_steps, p, l))
+    pool = multiprocessing.Pool(processes=9)
+    pool.map(perform_experiment, hyperparams)
 
-        for i in range(8000):
-            seed = np.random.choice(seeds)
-            print(seed)
-            total_rew = play_game(game, model, transition_model, seed, risk_averse=True, p=p, l=l)
-            print('\r{}/3000'.format(i), end='')
-            if i%1000==0:
-                with open(model_name, 'wb') as file:
-                    pickle.dump(transition_model,file)
-                with open(model_name + '.bk', 'wb') as file:
-                    pickle.dump(transition_model,file)
-                model.save_session()
-        tf.reset_default_graph()
