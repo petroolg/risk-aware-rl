@@ -84,7 +84,7 @@ class Q_approx:
 
     def entropy_risk(self, game, trans_model, s, a, **kwargs):
 
-        prob, rews = self.multi_step_distr(s,a,trans_model, game, 0.9, kwargs['n'], -2)
+        prob, rews = self.multi_step_distr(s,a,trans_model, game, 0.9, kwargs['n_steps'], -2)
 
         H = -prob.dot(np.log(prob.T))
         ER = prob.dot(rews.T)
@@ -94,7 +94,7 @@ class Q_approx:
         return 1.0 - float(risk)
 
     def mean_deviation_risk(self, game, trans_model, s, a, **kwargs):
-        prob, rews = self.multi_step_distr(s, a, trans_model, game, 0.9, kwargs['n'], -2)
+        prob, rews = self.multi_step_distr(s, a, trans_model, game, 0.9, kwargs['n_steps'], -2)
 
         ER = prob.dot(rews.T)
         risk = ER + kwargs['b'] * prob.dot((rews-ER)**kwargs['p'])**(1/kwargs['p'])
@@ -102,7 +102,7 @@ class Q_approx:
         return float(risk)
 
     def mean_semi_deviation_risk(self, game, trans_model, s, a, **kwargs):
-        prob, rews = self.multi_step_distr(s, a, trans_model, game, 0.9, kwargs['n'], -2)
+        prob, rews = self.multi_step_distr(s, a, trans_model, game, 0.9, kwargs['n_steps'], -2)
 
         ER = prob.dot(rews.T)
         devs = np.array([d if d > 0 else d for d in rews-ER])
@@ -111,7 +111,7 @@ class Q_approx:
         return float(risk)
 
     def c_value_at_risk(self, game, trans_model, s, a, **kwargs):
-        prob, rews = self.multi_step_distr(s, a, trans_model, game, 0.9, kwargs['n'], -2)
+        prob, rews = self.multi_step_distr(s, a, trans_model, game, 0.9, kwargs['n_steps'], -2)
         distribution = scipy.interpolate.interp1d(np.cumsum(prob), rews, bounds_error=False,
                                                   fill_value='extrapolate')
         value_at_risk = distribution(kwargs['alpha'])
@@ -151,7 +151,7 @@ class Q_approx:
             else:
                 for i, s_prime in enumerate(s_primes):
                     s_a_next = np.hstack((np.tile([np.frombuffer(s_prime, dtype=int)], (9, 1)), np.eye(9)))
-                    s_a_next = model.predict(s_a_next)
+                    s_a_next = self.predict(s_a_next, game, transition_model)
                     a_prime = np.argmax(s_a_next)
 
                     p, r = self.multi_step_distr_recursion(s_prime,a_prime, transition_model, game, gamma, n+1, n_steps, defaurt_rew)
@@ -191,7 +191,7 @@ def play_game(game, model, transition_model, **kwargs):
             total_rew += rew
 
             s_a_next = np.hstack((np.tile([game.state.copy()], (9, 1)), np.eye(9)))
-            s_a_next = model.predict(s_a_next)
+            s_a_next = model.predict(s_a_next, game, transition_model, **kwargs)
             # print(s_a_next)
             trgt = rew+0.9*np.max(s_a_next)
             sa_pairs.append(cur_sa)
@@ -206,9 +206,13 @@ def play_game(game, model, transition_model, **kwargs):
 
     return total_rews
 
-def perform_experiment(**kwargs):
+def perform_experiment(*args, **kwargs):
+
+    print(kwargs)
 
     global transition_model
+
+    game = Road_game()
     print('Executing run #{} for hyperparams p={}, lambda={}'.format(kwargs['j'], kwargs['p'], kwargs['l']))
     model = Q_approx(190, summary_name='{}_{}_p_{:.2f}_lambda_{:.2f}'.format(kwargs['risk_metric'], kwargs['n_steps'], kwargs['p'], kwargs['l']))
     seeds = [17, 19, 23, 29, 31, 37, 41, 43, 47, 53]
@@ -218,23 +222,23 @@ def perform_experiment(**kwargs):
         kwargs['seed'] = seed
         total_rew = play_game(game, model, transition_model, **kwargs)
         print('\r{}/3000'.format(i), end='')
-        if i % 1000 == 0:
+        if i % 10 == 0:
             model.save_session()
 
 
 if __name__ == '__main__':
 
     model_name = 'trans_model_safe.pckl'
-
-    game = Road_game()
     transition_model = pickle.load(open(model_name, 'rb'))
 
     hyper_p = np.linspace(0.1, 0.6, 3)
     hyper_lambda = np.linspace(0.05, 0.95, 3)
     risk_metrics = ['entropy_risk', 'mean_deviation', 'cvar']
     hyperparams = [(0,0)] + list(zip(list(np.tile(hyper_p, len(hyper_lambda))), list(np.repeat(hyper_lambda, len(hyper_p)))))
-    hyperparams = [{'p': p, 'l':l, 'n_steps':2, 'risk_metric': risk_metrics[0]} for p, l in hyperparams]
+    hyperparams = [{'p': p_l[0], 'l':p_l[1], 'j':j, 'n_steps':2, 'risk_metric': risk_metrics[0]} for j, p_l in enumerate(hyperparams)]
 
-    pool = multiprocessing.Pool(processes=9)
-    pool.map(perform_experiment, hyperparams)
+    inputProcess = multiprocessing.Process(target=perform_experiment, args=(None,hyperparams[0]))
+    inputProcess.start()
+
+    # perform_experiment(hyperparams[0])
 
