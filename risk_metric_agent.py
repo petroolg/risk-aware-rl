@@ -64,14 +64,13 @@ class Q_approx:
     def predict_risk_adjusted_utility(self, game, sa_pairs, transition_model, p, lam):
         Q = self.sess.run(self.Q, feed_dict={self.sa_pairs:np.atleast_2d(sa_pairs)})
 
-        k = self.multi_step_distr(sa_pairs[0,:-9], 2, transition_model, game, 0.9, 2, defaurt_rew=-2)
-
         risk = np.array([self.entropy_risk(game, transition_model,
                                                sa_pair[:-9],
                                                list(sa_pair[-9:]).index(1),
                                                lam)
                          for sa_pair in sa_pairs])
-        return p*(1-risk) + (1-p)*Q.ravel()
+
+        return p*risk + (1 - p)*Q.ravel()
 
     def add_summary(self, sa_pairs, target, total_rews, collisions):
 
@@ -96,7 +95,7 @@ class Q_approx:
 
         risk = l * H - (1 - l) * ER / 0.5
 
-        return float(risk)
+        return 1.0 - float(risk)
 
     def mean_deviation_risk(self, game, trans_model, s, a, p, b, n=2):
         prob, rews = self.multi_step_distr(s, a, trans_model, game, 0.9, n, -2)
@@ -226,15 +225,17 @@ if __name__ == '__main__':
     transition_model = pickle.load(open(model_name, 'rb'))
     # transition_model = Model()
 
-    seeds = [23]
-    hyper_p = np.linspace(0.1, 0.6, 5)
+    seeds = [17, 19, 23, 29, 31, 37, 41, 43, 47, 53]
+    hyper_p = np.linspace(0.1, 0.6, 3)
     hyper_lambda = np.linspace(0.05, 0.95, 3)
+    risk_metrics = ['entropy_risk', 'mean_deviation', 'cvar']
     hyperparams = list(zip(list(np.tile(hyper_p, len(hyper_lambda))), list(np.repeat(hyper_lambda, len(hyper_p)))))
+    n_steps = 2
 
     for j, params in enumerate(hyperparams):
         p, l = params
         print('Executing run #{} for hyperparams p={}, lambda={}'.format(j, p, l))
-        model = Q_approx(190, summary_name='p_{:.2f}_lambda_{:.2f}'.format(p, l))
+        model = Q_approx(190, summary_name='{}_{}_p_{:.2f}_lambda_{:.2f}'.format(risk_metrics[0], n_steps, p, l))
 
         for i in range(8000):
             seed = np.random.choice(seeds)
