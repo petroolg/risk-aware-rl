@@ -13,47 +13,50 @@ import sys
 import os
 import pickle
 import json
-os.environ["SDL_VIDEODRIVER"] = "dummy"
 
-ROAD_W = 6 # min value 6
+# os.environ["SDL_VIDEODRIVER"] = "dummy"
+
+ROAD_W = 6  # min value 6
 ROAD_H = 30
 ZOOM = 10
+
 
 def clamp(n, smallest, largest):
     return max(smallest, min(n, largest))
 
-class car:
+
+class Car:
 
     def __init__(self, pos, size, v, color='blue'):
         self.pos = np.array(pos)
         self.size = size
         self.v = v
-        self.safety_border = (1,1)
+        self.safety_border = (1, 1)
         self.color = THECOLORS.get(color)
 
-
     def coord(self, y):
-        x0 = self.pos[0] - self.size[0]/2
-        y0 = ROAD_H - (self.pos[1] - y + int(ROAD_H/4))
+        x0 = self.pos[0] - self.size[0] / 2
+        y0 = ROAD_H - (self.pos[1] - y + int(ROAD_H / 4))
         return int(x0), int(y0)
 
     def draw_safe(self, display, y):
         x, y = self.coord(y)
-        pygame.draw.rect(display, THECOLORS.get('lightpink'), ((x - self.safety_border[0])*ZOOM,
-                                                               (y - self.safety_border[1])*ZOOM,
-                                                               (self.size[0] + self.safety_border[0]+1)*ZOOM,
-                                                               (self.size[1] + self.safety_border[1]+1)*ZOOM))
+        pygame.draw.rect(display, THECOLORS.get('lightpink'), ((x - self.safety_border[0]) * ZOOM,
+                                                               (y - self.safety_border[1]) * ZOOM,
+                                                               (self.size[0] + self.safety_border[0] + 1) * ZOOM,
+                                                               (self.size[1] + self.safety_border[1] + 1) * ZOOM))
 
     def draw(self, display, y):
         x, y = self.coord(y)
-        pygame.draw.rect(display, self.color, (x*ZOOM,y*ZOOM,self.size[0]*ZOOM,self.size[1]*ZOOM))
+        pygame.draw.rect(display, self.color, (x * ZOOM, y * ZOOM, self.size[0] * ZOOM, self.size[1] * ZOOM))
+
 
 class road:
     def __init__(self, width, length, line1_vel, line2_vel):
         self.pole = np.zeros((length, width))
         self.width = width
         self.length = length
-        self.l2c = int(self.width/6) + 1
+        self.l2c = int(self.width / 6) + 1
         self.l1c = int(5 * self.width / 6)
         self.l2v = line2_vel
         self.l1v = line1_vel
@@ -64,7 +67,7 @@ class Road_game:
     def __init__(self):
 
         self.road = road(ROAD_W, ROAD_H, 6, 8)
-        self.car_size = [ROAD_W//5, 2*ROAD_W//5]
+        self.car_size = [ROAD_W // 5, 2 * ROAD_W // 5]
 
         self.step = 0
         self.goal = 70
@@ -78,7 +81,7 @@ class Road_game:
         self.state_length = self.road.pole.shape[0] * self.road.pole.shape[1]
 
         pygame.init()
-        self.DISPLAY = pygame.display.set_mode((ROAD_W*ZOOM, ROAD_H*ZOOM), 0, 32)
+        self.DISPLAY = pygame.display.set_mode((ROAD_W * ZOOM, ROAD_H * ZOOM), 0, 32)
         pygame.display.set_caption('risk-aware-rl')
 
         self.car = None
@@ -87,18 +90,17 @@ class Road_game:
 
         self.safety_border = (1, 1)
 
-        self.actios = [[1,1],
-                       [1,0],
-                       [1,-1],
-                       [0,1],
-                       [0,0],
-                       [0,-1],
-                       [-1,1],
-                       [-1,0],
-                       [-1,-1]]
+        self.actios = [[1, 1],
+                       [1, 0],
+                       [1, -1],
+                       [0, 1],
+                       [0, 0],
+                       [0, -1],
+                       [-1, 1],
+                       [-1, 0],
+                       [-1, -1]]
 
         self.reward_dict = json.load(open('reward.json', 'r'))
-
 
     @property
     def state(self):
@@ -107,8 +109,8 @@ class Road_game:
         return np.hstack((self.road.pole.reshape(self.state_length), self.car.v))
 
     def collision(self):
-        x, y = self.car.pos - [self.car_size[0]/2, 0]
-        a, b = self.car.pos + [self.car_size[0]/2, self.car_size[1]]
+        x, y = self.car.pos - [self.car_size[0] / 2, 0]
+        a, b = self.car.pos + [self.car_size[0] / 2, self.car_size[1]]
         for v in self.ov:
             x1, y1 = v.pos - [self.car_size[0] / 2, 0]
             a1, b1 = v.pos + [self.car_size[0] / 2, self.car_size[1]]
@@ -118,11 +120,13 @@ class Road_game:
         return False
 
     def safe_collision(self):
-        x, y = self.car.pos - [(self.car_size[0] + self.car.safety_border[0]*2)/2, 0]
-        a, b = self.car.pos + [(self.car_size[0] + self.car.safety_border[0]*2)/2, self.car_size[1] + self.car.safety_border[1]*2]
+        x, y = self.car.pos - [(self.car_size[0] + self.car.safety_border[0] * 2) / 2, 0]
+        a, b = self.car.pos + [(self.car_size[0] + self.car.safety_border[0] * 2) / 2,
+                               self.car_size[1] + self.car.safety_border[1] * 2]
         for v in self.ov:
-            x1, y1 = v.pos - [(self.car_size[0] + self.car.safety_border[0]*2)/2, 0]
-            a1, b1 = v.pos + [(self.car_size[0] + self.car.safety_border[0]*2)/2, self.car_size[1] + self.car.safety_border[1]*2]
+            x1, y1 = v.pos - [(self.car_size[0] + self.car.safety_border[0] * 2) / 2, 0]
+            a1, b1 = v.pos + [(self.car_size[0] + self.car.safety_border[0] * 2) / 2,
+                              self.car_size[1] + self.car.safety_border[1] * 2]
             if not (a <= x1 or a1 <= x or b <= y1 or b1 <= y):
                 # print('safe collision')
                 return True
@@ -163,7 +167,7 @@ class Road_game:
             # rew, zk = self.auto_move(zk)
             st = self.state
             d_v = self.process_keys()
-            s_a_pairs.append(np.hstack((st,d_v)))
+            s_a_pairs.append(np.hstack((st, d_v)))
             rew = self.move(d_v)
             total_rew.append(rew)
             # print('\rVelocity: {} Reward: {} Step {}'.format(self.car.v, sum(total_rew), self.step), end='')
@@ -171,14 +175,14 @@ class Road_game:
         if not self.collision() and save:
             np.save('trajectories_all/trajectories60x30/traj_{}.npy'.format(int(datetime.now().timestamp())), s_a_pairs)
             return sum(total_rew), len(s_a_pairs), True
-        elif len(s_a_pairs)>30 and save:
-            np.save('trajectories_all/trajectories60x30/traj_{}.npy'.format(int(datetime.now().timestamp())), s_a_pairs[:-10])
-            return sum(total_rew[:-10]), len(s_a_pairs)-10, True
+        elif len(s_a_pairs) > 30 and save:
+            np.save('trajectories_all/trajectories60x30/traj_{}.npy'.format(int(datetime.now().timestamp())),
+                    s_a_pairs[:-10])
+            return sum(total_rew[:-10]), len(s_a_pairs) - 10, True
         return sum(total_rew), len(s_a_pairs), False
 
-
     # function plays one game, computes total reward and zk along trajectory
-    def play_one_learn_model(self, model:Model, seed=None, save=False):
+    def play_one_learn_model(self, model: Model, seed=None, save=False):
         total_rew = 0.0
         self.init_game(seed=seed)
 
@@ -190,16 +194,18 @@ class Road_game:
             # d_v = self.process_keys()
             idx = np.random.choice(range(9))
             d_v = self.actios[idx]
-            s_a_pairs.append(np.hstack((st,d_v)))
+            s_a_pairs.append(np.hstack((st, d_v)))
             rew = self.move(d_v)
-            model.add_prob(st,self.actios.index(list(d_v)),self.state.copy(),self.event())
+            model.add_prob(st, self.actios.index(list(d_v)), self.state.copy(), self.event())
             total_rew += rew
             print('\rVelocity: {}'.format(self.car.v), end='')
             time.sleep(0.15)
         if not self.collision() and save:
-            np.save('trajectories_all/trajectories60x30safety/traj_{}.npy'.format(int(datetime.now().timestamp())), s_a_pairs)
-        elif np.array(s_a_pairs).shape[0]>30 and save:
-            np.save('trajectories_all/trajectories60x30safety/traj_{}.npy'.format(int(datetime.now().timestamp())), s_a_pairs[:-10])
+            np.save('trajectories_all/trajectories60x30safety/traj_{}.npy'.format(int(datetime.now().timestamp())),
+                    s_a_pairs)
+        elif np.array(s_a_pairs).shape[0] > 30 and save:
+            np.save('trajectories_all/trajectories60x30safety/traj_{}.npy'.format(int(datetime.now().timestamp())),
+                    s_a_pairs[:-10])
         return total_rew
 
     # initialization function, chooses state randomly
@@ -210,22 +216,21 @@ class Road_game:
 
         np.random.seed(seed)
 
-        self.car = car([self.road.l1c, 0], self.car_size, self.road.l1v,color='green')
+        self.car = Car([self.road.l1c, 0], self.car_size, self.road.l1v, color='green')
         self.camera = [self.car.pos[1]]
         self.n_cars_behind_l1 = 0
         self.n_cars_behind_l2 = 0
 
         pos1, pos2 = -2000, -2000
-        car_dists = np.arange(int(self.road.width/10 + self.car_size[1]),self.road.width*7,7)
+        car_dists = np.arange(int(self.road.width / 10 + self.car_size[1]), self.road.width * 7, 7)
         for i in range(120):
-            self.ov.append(car([self.road.l2c, pos1], self.car_size,  self.road.l2v))
-            if not int(-3*self.car_size[1]) < pos2 < int(3*self.car_size[1]):
-                self.ov.append(car([self.road.l1c, pos2], self.car_size,  self.road.l1v))
-            self.n_cars_behind_l1 += int(pos2<0)
-            self.n_cars_behind_l2 += int(pos1<0)
+            self.ov.append(Car([self.road.l2c, pos1], self.car_size, self.road.l2v))
+            if not int(-3 * self.car_size[1]) < pos2 < int(3 * self.car_size[1]):
+                self.ov.append(Car([self.road.l1c, pos2], self.car_size, self.road.l1v))
+            self.n_cars_behind_l1 += int(pos2 < 0)
+            self.n_cars_behind_l2 += int(pos1 < 0)
             pos1 += np.random.choice(car_dists)
             pos2 += np.random.choice(car_dists)
-
 
         self.render()
         np.random.seed(None)
@@ -233,7 +238,7 @@ class Road_game:
     def render(self):
 
         self.DISPLAY.fill(THECOLORS.get('white'))
-        pygame.draw.rect(self.DISPLAY, THECOLORS.get('grey'), (0, 0, ROAD_W*ZOOM, ROAD_H*ZOOM))
+        pygame.draw.rect(self.DISPLAY, THECOLORS.get('grey'), (0, 0, ROAD_W * ZOOM, ROAD_H * ZOOM))
 
         for v in self.ov:
             v.draw_safe(self.DISPLAY, self.car.pos[1])
@@ -258,7 +263,7 @@ class Road_game:
         bluepx[bluepx == 255] = 1
         redpx[redpx != 255] = 0
         redpx[redpx == 255] = 1
-        self.road.pole = 2*bluepx[::ZOOM, ::ZOOM] + 2*greenpx[::ZOOM, ::ZOOM] + redpx[::ZOOM, ::ZOOM] - 1
+        self.road.pole = 2 * bluepx[::ZOOM, ::ZOOM] + 2 * greenpx[::ZOOM, ::ZOOM] + redpx[::ZOOM, ::ZOOM] - 1
 
         # plt.imshow(self.road.pole.reshape(ROAD_W, ROAD_H))
         # plt.colorbar()
@@ -288,10 +293,10 @@ class Road_game:
         n_cars_behind_l1 = 0
         n_cars_behind_l2 = 0
         for car in self.ov:
-            n_cars_behind_l1 += int(car.pos[1] < self.car.pos[1]) * int(car.pos[0]==self.road.l1c)
+            n_cars_behind_l1 += int(car.pos[1] < self.car.pos[1]) * int(car.pos[0] == self.road.l1c)
             n_cars_behind_l2 += int(car.pos[1] < self.car.pos[1]) * int(car.pos[0] == self.road.l2c)
 
-        reward1 = (n_cars_behind_l2 - self.n_cars_behind_l2)*5
+        reward1 = (n_cars_behind_l2 - self.n_cars_behind_l2) * 5
         reward2 = (n_cars_behind_l1 - self.n_cars_behind_l1)
 
         self.n_cars_behind_l1 = n_cars_behind_l1
@@ -348,8 +353,8 @@ class Road_game:
     def quit(self):
         pygame.quit()
 
-def manual_control(seeds):
 
+def manual_control(seeds):
     game = Road_game()  # instance of a game
     while True:
         seed = np.random.choice(seeds)
@@ -371,7 +376,7 @@ def replay_game(traj):
     def f(i):
         return traj[i, :-3].reshape((ROAD_W, ROAD_H)).T
 
-    ims = []
+    ims = [] # type list
     for i in range(len(traj)):
         im = plt.imshow(f(i), animated=True)
         ims.append([im])
@@ -380,6 +385,7 @@ def replay_game(traj):
                                     repeat_delay=10000, repeat=False)
 
     plt.show()
+
 
 def learn_model(seeds):
     game = Road_game()  # instance of a game

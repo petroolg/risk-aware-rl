@@ -2,8 +2,10 @@ import numpy as np
 import hashlib
 import sys
 
+
 def hash18(val):
     return int(hashlib.sha1(val).hexdigest(), 16) % (sys.maxsize * 2) - sys.maxsize
+
 
 class Model:
 
@@ -38,7 +40,7 @@ class Model:
         freqs = np.array([v[0] for v in mtx])
         rews = np.array([game.reward(events=v[1]) for v in mtx])
 
-        return np.vstack((freqs/freqs.sum(), rews)).T, keys
+        return np.vstack((freqs / freqs.sum(), rews)).T, keys
 
     def add_prob(self, s_raw, a, s_prime_raw, reward):
 
@@ -48,12 +50,12 @@ class Model:
         s = np.array(s_raw).astype(int).tobytes()
         s_prime = np.array(s_prime_raw).astype(int).tobytes()
 
-        if not self.transition_model.get(s,{}):
+        if not self.transition_model.get(s, {}):
             self.transition_model[s] = {}
         if not self.transition_model[s].get(a, {}):
             self.transition_model[s][a] = {}
         if not self.transition_model[s][a].get(s_prime, []):
-            self.transition_model[s][a][s_prime] = [0,0]
+            self.transition_model[s][a][s_prime] = [0, 0]
         else:
             if (np.array(self.transition_model[s][a][s_prime][1]) != np.array(reward)).any():
                 print("Reward doesnt match!", self.transition_model[s][a][s_prime][1], reward)
