@@ -206,7 +206,7 @@ def play_game(game, model, transition_model, **kwargs):
 
     return total_rews
 
-def perform_experiment(*args, **kwargs):
+def perform_experiment(kwargs):
 
     print(kwargs)
 
@@ -237,8 +237,11 @@ if __name__ == '__main__':
     hyperparams = [(0,0)] + list(zip(list(np.tile(hyper_p, len(hyper_lambda))), list(np.repeat(hyper_lambda, len(hyper_p)))))
     hyperparams = [{'p': p_l[0], 'l':p_l[1], 'j':j, 'n_steps':2, 'risk_metric': risk_metrics[0]} for j, p_l in enumerate(hyperparams)]
 
-    inputProcess = multiprocessing.Process(target=perform_experiment, args=(None,hyperparams[0]))
-    inputProcess.start()
+    pool = multiprocessing.Pool(9)
+    pool.map_async(perform_experiment, hyperparams)
+
+    pool.close()
+    pool.join() 
 
     # perform_experiment(hyperparams[0])
 
