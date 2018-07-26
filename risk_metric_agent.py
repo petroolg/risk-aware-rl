@@ -111,7 +111,7 @@ class QApprox:
         prob, rews = self.multi_step_distr(s, a, trans_model, game, GAMMA, kwargs['n_steps'])
 
         ER = prob.dot(rews.T)
-        risk = ER + kwargs['b'] * prob.dot((rews - ER) ** kwargs['ps']) ** (1 / kwargs['ps'])
+        risk = ER - kwargs['b'] * prob.dot((rews - ER).T ** kwargs['ps']) ** (1 / kwargs['ps'])
 
         return float(risk)
 
@@ -120,7 +120,7 @@ class QApprox:
 
         ER = prob.dot(rews.T)
         devs = np.array([d if d > 0 else d for d in rews - ER])
-        risk = ER + kwargs['b'] * prob.dot(devs ** kwargs['ps']) ** (1 / kwargs['ps'])
+        risk = ER - kwargs['b'] * prob.dot(devs.T ** kwargs['ps']) ** (1 / kwargs['ps'])
 
         return float(risk)
 
@@ -129,9 +129,9 @@ class QApprox:
 
         if len(prob.ravel()) == 1:
             return float(rews)
-        distribution = scipy.interpolate.interp1d(np.cumsum(prob), rews, bounds_error=False,
-                                                  fill_value='extrapolate')
-        value_at_risk = distribution(kwargs['alpha'])
+        cumulative_dist = np.cumsum(prob, axis=1)
+        value_at_risk = rews[cumulative_dist >= kwargs['alpha']][0]
+
         c_var = prob[rews <= value_at_risk].dot(rews[rews <= value_at_risk])
 
         return float(c_var)
@@ -247,7 +247,7 @@ def perform_experiment(kwargs):
     model = QApprox(190, risk_metric=risk_metric, summary_name=summary_name)
     seeds = [17, 19, 23, 29, 31, 37, 41, 43, 47, 53]
 
-    learning_steps = 8000
+    learning_steps = 10000
 
     for i in range(learning_steps):
         seed = np.random.choice(seeds)
@@ -279,24 +279,28 @@ if __name__ == '__main__':
                        enumerate(hyperparams)]
 
     elif name == 'cvar':
-        hyper_alpha = np.linspace(0.03, 0.2, 5)
-        hyperparams = [{'p':1.0, 'alpha': alpha, 'j': j, 'n_steps': 2, 'risk_metric': 'cvar'} for j, alpha in enumerate(hyper_alpha)]
+        hyper_alpha = np.linspace(0.1, 0.8, 4)
+        hyper_p = np.linspace(0.6, 1.0, 3)
+        hyperparams = list(zip(list(np.tile(hyper_p, len(hyper_alpha))), list(np.repeat(hyper_alpha, len(hyper_p)))))
+        hyperparams = [{'p': p_a[0], 'alpha': p_a[1], 'j': j, 'n_steps': 2, 'risk_metric': 'cvar'} for j, p_a in
+                       enumerate(hyperparams)]
 
 
     elif name == 'mean_deviation':
-        hyper_p = np.linspace(1, 2.5, 4)
+        hyper_p = np.linspace(0.6, 1.0, 3)
         hyper_b = np.linspace(0.1, 3.0, 3)
         hyperparams = list(zip(list(np.tile(hyper_p, len(hyper_b))), list(np.repeat(hyper_b, len(hyper_p)))))
-        hyperparams = [{'p': 1.0, 'ps':p_b[0], 'b': p_b[1], 'j': j, 'n_steps': 2, 'risk_metric': 'mean_deviation'} for j, p_b in
+        hyperparams = [{'p': p_b[0], 'ps': 2, 'b': p_b[1], 'j': j, 'n_steps': 4, 'risk_metric': 'mean_deviation'} for
+                       j, p_b in
                        enumerate(hyperparams)]
 
     else:
         hyperparams = [{'j': 0}]
 
-    pool = multiprocessing.Pool(len(hyperparams))
-    pool.map_async(perform_experiment, hyperparams)
+    # pool = multiprocessing.Pool(5)
+    # pool.map_async(perform_experiment, hyperparams)
+    #
+    # pool.close()
+    # pool.join()
 
-    pool.close()
-    pool.join()
-
-    # perform_experiment(hyperparams[0])
+    perform_experiment(hyperparams[0])
