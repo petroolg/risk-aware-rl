@@ -265,7 +265,6 @@ if __name__ == '__main__':
                         help='EXPERIMENT NAME: [entropy, cvar, mean_dev]')
 
     args = parser.parse_args()
-
     name = args.experiment_name
 
     model_name = 'trans_model_safe.pckl'
@@ -297,10 +296,15 @@ if __name__ == '__main__':
     else:
         hyperparams = [{'j': 0}]
 
-    # pool = multiprocessing.Pool(5)
-    # pool.map_async(perform_experiment, hyperparams)
-    #
-    # pool.close()
-    # pool.join()
+    pool = multiprocessing.Pool(len(hyperparams))
+    pool.map_async(perform_experiment, hyperparams)
 
-    perform_experiment(hyperparams[0])
+    pool.close()
+    pool.join()
+
+    # perform_experiment(hyperparams[0])
+
+    with open(model_name, 'wb') as file:
+        pickle.dump(transition_model, file)
+    with open(model_name + '.bk', 'wb') as file:
+        pickle.dump(transition_model, file)
