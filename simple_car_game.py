@@ -14,7 +14,7 @@ import os
 import pickle
 import json
 
-# os.environ["SDL_VIDEODRIVER"] = "dummy"
+os.environ["SDL_VIDEODRIVER"] = "dummy"
 
 ROAD_W = 6  # min value 6
 ROAD_H = 30
