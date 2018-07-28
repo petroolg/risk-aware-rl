@@ -12,7 +12,7 @@ import argparse
 
 global transition_model
 
-GAMMA = 0.95
+GAMMA = 0.7
 
 
 class QApprox:
@@ -182,8 +182,8 @@ class QApprox:
         return next_p, next_r
 
 
-def softmax(vec):
-    return np.exp(vec) / np.sum(np.exp(vec))
+def softmax(vec, tau=0.6):
+    return np.exp(vec/tau) / np.sum(np.exp(vec/tau))
 
 
 def play_game(game, model, transition_model, **kwargs):
