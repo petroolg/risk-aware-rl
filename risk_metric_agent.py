@@ -62,8 +62,7 @@ class QApprox:
                 self.risk_metric = self.c_value_at_risk
 
     def fit(self, sa_pairs, target):
-        global_step, summary, _ = self.sess.run([self.global_step, self.merged, self.train_op],
-                                                feed_dict={self.sa_pairs: np.atleast_2d(sa_pairs),
+        self.sess.run(self.train_op,feed_dict={self.sa_pairs: np.atleast_2d(sa_pairs),
                                                            self.target: np.atleast_2d(target)})
 
     def predict(self, sa_pairs, game, transition_model, **kwargs):
