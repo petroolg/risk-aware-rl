@@ -111,6 +111,7 @@ class TwentyStateGame:
         self.zero_state()
         for i in range(T):
             p_a = self.sample_action()
+            print(p_a)
             zk += self.log_like()
             rew = self.move(p_a)
             total_rew += rew
@@ -132,7 +133,7 @@ if __name__ == '__main__':
     N_games_test = 200  # number of games to play for data gathering
     length_of_game = 40  # number of steps in one game
 
-    variance_bounds = [0.0, 100.0]  # variance bounds
+    variance_bounds = [100.0]  # variance bounds
     colors = ['red', 'blue']
 
     tr_plot, theta_plot, Var_plot, G_plot = [], [], [], []  # data for plots

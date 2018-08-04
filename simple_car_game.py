@@ -14,7 +14,7 @@ import os
 import pickle
 import json
 
-os.environ["SDL_VIDEODRIVER"] = "dummy"
+# os.environ["SDL_VIDEODRIVER"] = "dummy"
 
 ROAD_W = 6  # min value 6
 ROAD_H = 30
@@ -70,7 +70,7 @@ class Road_game:
         self.car_size = [ROAD_W // 5, 2 * ROAD_W // 5]
 
         self.step = 0
-        self.goal = 70
+        self.goal = 20
 
         self.n_cars_behind_l1 = 0
         self.n_cars_behind_l2 = 0
@@ -104,9 +104,9 @@ class Road_game:
 
     @property
     def state(self):
-        # vel = np.zeros(self.max_speed-self.min_speed+1)
-        # vel[int(self.car.v - self.min_speed)] = 1.0
-        return np.hstack((self.road.pole.reshape(self.state_length), self.car.v))
+        vel = np.zeros(self.max_speed-self.min_speed+1)
+        vel[int(self.car.v - self.min_speed)] = 1.0
+        return np.hstack((self.road.pole.reshape(self.state_length), vel))
 
     def collision(self):
         x, y = self.car.pos - [self.car_size[0] / 2, 0]
