@@ -157,7 +157,7 @@ class Road_game:
         return d_v
 
     # function plays one game, computes total reward and zk along trajectory
-    def play_one(self, seed=None, save=True):
+    def play_one(self, seed=None, save=False):
         total_rew = []
         self.init_game(seed=seed)
 
@@ -222,7 +222,7 @@ class Road_game:
         self.n_cars_behind_l2 = 0
 
         pos1, pos2 = -2000, -2000
-        car_dists = np.arange(int(self.road.width / 10 + self.car_size[1]), self.road.width * 7, 7)
+        car_dists = np.arange(int(self.road.width / 3 + self.car_size[1]), self.road.width * 8, 7)
         for i in range(120):
             self.ov.append(Car([self.road.l2c, pos1], self.car_size, self.road.l2v))
             if not int(-3 * self.car_size[1]) < pos2 < int(3 * self.car_size[1]):
@@ -340,11 +340,35 @@ class Road_game:
         if (self.car.v < self.max_speed and d_v[1] > 0) or (self.car.v > self.min_speed and d_v[1] < 0):
             self.car.v += d_v[1]
 
+        # print(self.car.pos)
+
         self.update_game()
 
         return self.reward()
 
+    def can_accelerate(self, car):
+        min_dist = 10000
+        for v in self.ov:
+            if v.pos[0]==self.road.l2c and not v is car:
+                dist = v.pos[1] - car.pos[1]
+                if dist < min_dist and dist > 0:
+                    min_dist = dist
+
+        return min_dist >= self.car_size[1]*3
+
     def update_game(self):
+
+        for v in self.ov:
+            if v.pos[0]==self.road.l2c:
+                chanse = np.random.rand()
+                if not self.can_accelerate(v) or 0.2 < chanse < 0.27:
+                    v.v = 8
+                    v.color = THECOLORS.get('blue')
+                elif chanse < 0.1:
+                    v.v = 9
+                    v.color = THECOLORS.get('red')
+
+
         for v in self.ov:
             v.pos[1] += v.v
         self.car.pos[1] += self.car.v
@@ -354,20 +378,14 @@ class Road_game:
         pygame.quit()
 
 
-def manual_control(seeds):
+def manual_control(seeds, save):
     game = Road_game()  # instance of a game
+    game.goal = 100
     while True:
         seed = np.random.choice(seeds)
         print(seed)
-        total_rew, len_traj, saved = game.play_one(seed=seed)
+        total_rew, len_traj, saved = game.play_one(seed=seed, save=False)
         print('\n{:.2f}\n'.format(total_rew))
-        if saved:
-            if os.path.isfile('trajectories_all/trajectories60x30/meta.npy'):
-                meta = np.load('trajectories_all/trajectories60x30/meta.npy')
-                meta = np.append(meta, [[total_rew, len_traj]], axis=0)
-                np.save('trajectories_all/trajectories60x30/meta.npy', meta)
-            else:
-                np.save('trajectories_all/trajectories60x30/meta.npy', np.atleast_2d([total_rew, len_traj]))
 
 
 def replay_game(traj):
@@ -405,5 +423,5 @@ if __name__ == '__main__':
     seeds = [17, 19, 23, 29, 31, 37, 41, 43, 47, 53]
     # for traj in os.listdir('trajectories_all/trajectories60x30'):
     #     replay_game(np.load('trajectories_all/trajectories60x30/' + traj))
-    manual_control(seeds)
+    manual_control(seeds, save=False)
     # learn_model(seeds)

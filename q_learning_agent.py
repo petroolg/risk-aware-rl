@@ -243,7 +243,7 @@ def perform_experiment(kwargs):
     risk_metric = kwargs.get('risk_metric', None)
     print('Executing run #{} for hyperparams {}'.format(kwargs['j'], kwargs))
     summary_name = '{}'.format(kwargs)
-    model = QApprox(190, risk_metric=risk_metric, summary_name=summary_name)
+    model = QApprox(197, risk_metric=risk_metric, summary_name=summary_name)
     seeds = [17, 19, 23, 29, 31, 37, 41, 43, 47, 53]
 
     learning_steps = 10000
@@ -277,8 +277,8 @@ if __name__ == '__main__':
                        enumerate(hyperparams)]
 
     elif name == 'cvar':
-        hyper_alpha = np.linspace(0.1, 0.8, 4)
-        hyper_p = np.linspace(0.6, 1.0, 3)
+        hyper_alpha = np.linspace(0.1, 0.8, 3)
+        hyper_p = np.linspace(0.6, 8.0, 2)
         hyperparams = list(zip(list(np.tile(hyper_p, len(hyper_alpha))), list(np.repeat(hyper_alpha, len(hyper_p)))))
         hyperparams = [{'p': p_a[0], 'alpha': p_a[1], 'j': j, 'n_steps': 2, 'risk_metric': 'cvar'} for j, p_a in
                        enumerate(hyperparams)]
@@ -295,13 +295,13 @@ if __name__ == '__main__':
     else:
         hyperparams = [{'j': 0}]
 
-    pool = multiprocessing.Pool(len(hyperparams))
-    pool.map_async(perform_experiment, hyperparams)
+    # pool = multiprocessing.Pool(len(hyperparams))
+    # pool.map_async(perform_experiment, hyperparams)
+    #
+    # pool.close()
+    # pool.join()
 
-    pool.close()
-    pool.join()
-
-    # perform_experiment(hyperparams[0])
+    perform_experiment(hyperparams[0])
 
     with open(model_name, 'wb') as file:
         pickle.dump(transition_model, file)
