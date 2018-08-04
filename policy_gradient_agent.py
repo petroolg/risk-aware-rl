@@ -15,6 +15,8 @@ import argparse
 GAMMA = 0.95
 state_size = 188
 action_size = 9
+
+
 # Based on Policy Gradients with variance Related Risk Criteria
 
 class PolicyGradientVariance:
@@ -24,9 +26,9 @@ class PolicyGradientVariance:
             self.save_path = 'graphs/policy_gradient/model/' + summary_name + '/model.ckpt'
 
             self.alpha = tf.constant(0.1)
-            self.beta = tf.constant(0.001)
+            self.beta = tf.constant(0.0001)
             self.lam = tf.constant(0.5)
-            self.tau = tf.constant(2.0) # temperature for softmax policy
+            self.tau = tf.constant(2.0)  # temperature for softmax policy
 
             self.states = tf.placeholder(tf.float32, (None, state_size), name='states')
             self.actions = tf.placeholder(tf.int32, (None, action_size), name='actions')
@@ -68,7 +70,8 @@ class PolicyGradientVariance:
                 self.policy_loss = tf.reduce_mean(neg_log_prob * self.reward)
 
                 self.policy_optimizer = tf.train.AdamOptimizer(learning_rate=self.beta)
-                self.policy_train_op = self.policy_optimizer.minimize(self.policy_loss, var_list=self.vars, global_step=self.global_step)
+                self.policy_train_op = self.policy_optimizer.minimize(self.policy_loss, var_list=self.vars,
+                                                                      global_step=self.global_step)
 
             for var in self.vars:
                 tf.summary.histogram(var.name, var)
@@ -92,27 +95,26 @@ class PolicyGradientVariance:
             # self.saver.restore(self.sess, self.save_path)
             # self.sess.graph.finalize()
 
-    def fit(self, states, actions,  R):
+    def fit(self, states, actions, R):
 
-        r=0
+        r = 0
         discounted_rewards = np.zeros_like(R)
         for t in reversed(range(len(R))):
             # future discounted reward from now on
             r = R[t] + GAMMA * r
             discounted_rewards[t] = r
 
-        discounted_rewards = (discounted_rewards - np.mean(discounted_rewards))/(np.std(discounted_rewards) + 0.001)
+        discounted_rewards = (discounted_rewards - np.mean(discounted_rewards)) / (np.std(discounted_rewards) + 0.001)
 
         self.sess.run([self.policy_train_op], feed_dict={self.states: np.atleast_2d(states),
-                                     self.actions: np.atleast_2d(actions),
-                                     self.reward: discounted_rewards})
+                                                         self.actions: np.atleast_2d(actions),
+                                                         self.reward: discounted_rewards})
 
     def predict(self, states):
-        move_idx = self.sess.run(self.policy,feed_dict={self.states: np.atleast_2d(states)})
+        move_idx = self.sess.run(self.policy, feed_dict={self.states: np.atleast_2d(states)})
         return move_idx
 
     def add_summary(self, states, actions, rewards, collision):
-
 
         global_step, summary = self.sess.run([self.global_step, self.merged],
                                              feed_dict={self.states: np.atleast_2d(states),
@@ -137,7 +139,6 @@ def play_game(game, model, **kwargs):
 
     state = game.state.copy()
     while not game.game_over:
-
         action_probability_distribution = model.predict(state)
 
         action = np.random.choice(range(action_size),
@@ -157,13 +158,11 @@ def play_game(game, model, **kwargs):
     model.add_summary(episode_states, episode_actions, episode_rewards, collision)
 
 
-
 def perform_experiment(kwargs):
     print(kwargs)
 
     game = Road_game()
     # game = TwentyStateGame(0.0)
-
 
     print('Executing run #{} for hyperparams {}'.format(kwargs['j'], kwargs))
     summary_name = '{}'.format(kwargs)
@@ -178,7 +177,6 @@ def perform_experiment(kwargs):
             model.save_session()
 
 
-
 if __name__ == '__main__':
     hyper_b = np.linspace(2.0, 100.0, 3)
     hyperparams = [{'b': b, 'j': j} for j, b in enumerate(hyper_b)]
@@ -190,4 +188,3 @@ if __name__ == '__main__':
     # pool.join()
 
     perform_experiment(hyperparams[0])
-

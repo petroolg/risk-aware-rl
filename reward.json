@@ -1,10 +1,10 @@
-{"collision": -20.0,
-  "goal_reached": 0.0,
-  "overtake_fast": 10.0,
-  "pass_fast": -10.0,
-  "overtake_slow": 3.0,
-  "pass_slow": -3.0,
-  "nil": 0.0,
+{"collision": -10,
+  "goal_reached": 0,
+  "overtake_fast": 1.0,
+  "pass_fast": -1.0,
+  "overtake_slow": 0.5,
+  "pass_slow": -0.5,
+  "nil": 0,
   "safe_collision": -0.05,
   "default": -2.0
 }
