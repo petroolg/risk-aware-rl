@@ -221,8 +221,8 @@ class Road_game:
         self.n_cars_behind_l1 = 0
         self.n_cars_behind_l2 = 0
 
-        pos1, pos2 = -2000, -2000
-        car_dists = np.arange(int(self.road.width / 3 + self.car_size[1]), self.road.width * 8, 7)
+        pos1, pos2 = -700, -700
+        car_dists = np.arange(int(self.road.width / 3 + self.car_size[1]), self.road.width * 6, 7)
         for i in range(120):
             self.ov.append(Car([self.road.l2c, pos1], self.car_size, self.road.l2v))
             if not int(-3 * self.car_size[1]) < pos2 < int(3 * self.car_size[1]):
@@ -363,11 +363,10 @@ class Road_game:
                 chanse = np.random.rand()
                 if not self.can_accelerate(v) or 0.2 < chanse < 0.27:
                     v.v = 8
-                    v.color = THECOLORS.get('blue')
+                    # v.color = THECOLORS.get('blue')
                 elif chanse < 0.1:
                     v.v = 9
-                    v.color = THECOLORS.get('red')
-
+                    # v.color = THECOLORS.get('red')
 
         for v in self.ov:
             v.pos[1] += v.v

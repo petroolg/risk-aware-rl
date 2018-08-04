@@ -23,10 +23,8 @@ class PolicyGradientVariance:
 
     def __init__(self, summary_name=''):
         with tf.variable_scope('policy_train', reuse=tf.AUTO_REUSE):
-            self.save_path = 'graphs/policy_gradient/model/' + summary_name + '/model.ckpt'
-
             self.alpha = tf.constant(0.1)
-            self.beta = tf.constant(0.0001)
+            self.beta = tf.constant(0.001)
             self.lam = tf.constant(0.5)
             self.tau = tf.constant(2.0)  # temperature for softmax policy
 
@@ -53,12 +51,12 @@ class PolicyGradientVariance:
                                               bias_initializer=tf.contrib.layers.xavier_initializer())
             #
             # with tf.name_scope('reward-update'):
-            #     self.reward_loss = tf.scalar_mul(0.5, tf.square(tf.subtract(tf.gather_nd(self.reward, tf.shape(self.reward)-1), self.gain)))
+            #     self.reward_loss = tf.square(tf.subtract(tf.reduce_mean(self.reward), self.gain))
             #     self.reward_train_op = tf.train.AdamOptimizer(learning_rate=self.alpha).minimize(self.reward_loss,
             #                                                                                      var_list=[self.gain])
             #
             # with tf.name_scope('variance-update'):
-            #     self.variance_loss = tf.scalar_mul(0.5, tf.square(tf.subtract(tf.subtract(tf.square(tf.gather_nd(self.reward, tf.shape(self.reward)-1)), tf.square(self.gain)), self.variance)))
+            #     self.variance_loss = tf.square(tf.subtract(tf.reduce_mean(tf.square(tf.subtract(self.reward, self.gain))), self.variance))
             #     self.variance_train_op = tf.train.AdamOptimizer(learning_rate=self.alpha).minimize(self.variance_loss,
             #                                                                                        var_list=[
             #                                                                                            self.variance])
@@ -86,6 +84,7 @@ class PolicyGradientVariance:
             self.merged = tf.summary.merge_all()
             summary_name = 'run{}_{}'.format(str(datetime.date(datetime.now())),
                                              str(datetime.time(datetime.now()))[:8]) + summary_name
+            self.save_path = 'graphs/policy_gradient/model/' + summary_name + '/model.ckpt'
             self.train_writer = tf.summary.FileWriter('graphs/policy_gradient/' + summary_name, self.sess.graph)
             self.saver = tf.train.Saver()
 
@@ -95,67 +94,78 @@ class PolicyGradientVariance:
             # self.saver.restore(self.sess, self.save_path)
             # self.sess.graph.finalize()
 
-    def fit(self, states, actions, R):
-
-        r = 0
-        discounted_rewards = np.zeros_like(R)
-        for t in reversed(range(len(R))):
-            # future discounted reward from now on
-            r = R[t] + GAMMA * r
-            discounted_rewards[t] = r
-
-        discounted_rewards = (discounted_rewards - np.mean(discounted_rewards)) / (np.std(discounted_rewards) + 0.001)
-
-        self.sess.run([self.policy_train_op], feed_dict={self.states: np.atleast_2d(states),
-                                                         self.actions: np.atleast_2d(actions),
-                                                         self.reward: discounted_rewards})
+    def fit(self, states, actions, rewards):
+        normalized_rewards = np.hstack([normalize_rewards(rew) for rew in rewards])
+        self.sess.run([self.policy_train_op], feed_dict={self.states: states,
+                                                         self.actions: actions,
+                                                         self.reward: normalized_rewards})
 
     def predict(self, states):
-        move_idx = self.sess.run(self.policy, feed_dict={self.states: np.atleast_2d(states)})
-        return move_idx
+        return self.sess.run(self.policy, feed_dict={self.states: np.atleast_2d(states)})
 
     def add_summary(self, states, actions, rewards, collision):
-
+        normalized_rewards = np.hstack([normalize_rewards(rew) for rew in rewards])
         global_step, summary = self.sess.run([self.global_step, self.merged],
                                              feed_dict={self.states: np.atleast_2d(states),
-                                                        self.reward: rewards,
+                                                        self.reward: normalized_rewards,
                                                         self.actions: actions})
 
         self.train_writer.add_summary(summary, global_step=global_step)
 
         summary = tf.Summary()
-        summary.value.add(tag='Total reward', simple_value=sum(rewards))
-        summary.value.add(tag='Collisions', simple_value=collision)
+        summary.value.add(tag='Total reward', simple_value=np.mean([sum(r) for r in rewards]))
+        summary.value.add(tag='Collisions', simple_value=np.mean(collision))
         self.train_writer.add_summary(summary, global_step=global_step)
 
     def save_session(self):
         self.saver.save(self.sess, self.save_path)
 
 
+def normalize_rewards(R):
+    r = 0
+    discounted_rewards = np.zeros_like(R)
+    for t in reversed(range(len(R))):
+        r = R[t] + GAMMA * r
+        discounted_rewards[t] = r
+
+    discounted_rewards = (discounted_rewards - np.mean(discounted_rewards)) / (np.std(discounted_rewards) + 0.001)
+
+    return discounted_rewards
+
+
 def play_game(game, model, **kwargs):
-    episode_states, episode_actions, episode_rewards = [], [], []
+    states, actions, rewards, collisions = [], [], [], []
+    n_episodes = 20
+    for _ in range(n_episodes):
+        episode_states, episode_actions, episode_rewards = [], [], []
 
-    game.init_game(seed=kwargs.get('seed', None))
+        game.init_game(seed=kwargs.get('seed', None))
 
-    state = game.state.copy()
-    while not game.game_over:
-        action_probability_distribution = model.predict(state)
+        state = game.state.copy()
+        while not game.game_over:
+            action_probability_distribution = model.predict(state)
 
-        action = np.random.choice(range(action_size),
-                                  p=action_probability_distribution.ravel())
+            action = np.random.choice(range(action_size),
+                                      p=action_probability_distribution.ravel())
 
-        reward = game.move(game.actios[action])
-        new_state = game.state.copy()
-        episode_states.append(state)
-        action_ = np.zeros(action_size)
-        action_[action] = 1
-        episode_actions.append(action_)
-        episode_rewards.append(reward)
-        state = new_state
-    collision = game.collision()
+            reward = game.move(game.actios[action])
+            new_state = game.state.copy()
+            episode_states.append(state)
+            action_ = np.zeros(action_size)
+            action_[action] = 1
+            episode_actions.append(action_)
+            episode_rewards.append(reward)
+            state = new_state
+        collisions.append(game.collision())
+        states.append(episode_states)
+        actions.append(episode_actions)
+        rewards.append(episode_rewards)
 
-    model.fit(episode_states, episode_actions, episode_rewards)
-    model.add_summary(episode_states, episode_actions, episode_rewards, collision)
+    states = np.vstack(states)
+    actions = np.vstack(actions)
+
+    model.fit(states, actions, rewards)
+    model.add_summary(states, actions, rewards, collisions)
 
 
 def perform_experiment(kwargs):
