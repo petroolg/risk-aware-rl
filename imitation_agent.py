@@ -342,12 +342,12 @@ if __name__ == '__main__':
 
     expert_traj = np.array(expert_traj)
 
-    # eOM, euS, euA = occupancy_measure(expert_traj)
-    # np.save('eOM.npy', eOM)
-    # np.save('euS.npy', euS)
-    # np.save('euA.npy', euA)
+    eOM, euS, euA = occupancy_measure(expert_traj)
+    np.save('occ_measures/eOM.npy', eOM)
+    np.save('occ_measures/euS.npy', euS)
+    np.save('occ_measures/euA.npy', euA)
 
-    eOM, euS, euA = np.load('occ_measures/eOM.npy'), np.load('occ_measures/euS.npy'), np.load('occ_measures/euA.npy')
+    # eOM, euS, euA = np.load('occ_measures/eOM.npy'), np.load('occ_measures/euS.npy'), np.load('occ_measures/euA.npy')
 
     model = SGDRegressor_occupancy(expert_traj[0].shape[1])
 
