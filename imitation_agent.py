@@ -25,8 +25,8 @@ def softmax(x):
 
 class SGDRegressor_occupancy:
     def __init__(self, xd):
-        self.save_path = 'graphs/graph_imit_supervised/graph.ckpt'
-        self.restore_path = 'graphs/graph_supervised/graph.ckpt'
+        self.save_path = 'graphs/graph_imit/graph.ckpt'
+        self.restore_path = 'graphs/graph_imit/graph.ckpt'
 
         self.states = tf.placeholder(tf.float32, shape=[None, xd - 2], name='states')
         self.action_ind = tf.placeholder(tf.int32, shape=[None, 2], name='act_inds')
@@ -39,10 +39,10 @@ class SGDRegressor_occupancy:
         self.expert_inds = tf.placeholder(tf.int32, shape=[None, 2], name='expert_inds')
         self.agent_inds = tf.placeholder(tf.int32, shape=[None, 2], name='agent_inds')
 
-        Dw0 = tf.layers.dense(self.sa_pairs, 64, activation=tf.nn.sigmoid, use_bias=True, name='Dw0', reuse=None)
-        Dw1 = tf.layers.dense(Dw0, 32, activation=tf.nn.sigmoid, use_bias=True, name='Dw1', reuse=None)
-        Dw2 = tf.layers.dense(Dw1, 16, activation=tf.nn.sigmoid, use_bias=True, name='Dw2', reuse=None)
-        Dw = tf.layers.dense(Dw2, 1, activation=tf.nn.sigmoid, use_bias=True, name='Dw', reuse=None)
+        Dw0 = tf.layers.dense(self.sa_pairs, 32, activation=tf.nn.sigmoid, use_bias=True, name='Dw0', reuse=None)
+        Dw1 = tf.layers.dense(Dw0, 16, activation=tf.nn.sigmoid, use_bias=True, name='Dw1', reuse=None)
+        # Dw2 = tf.layers.dense(Dw1, 16, activation=tf.nn.sigmoid, use_bias=True, name='Dw2', reuse=None)
+        Dw = tf.layers.dense(Dw0, 1, activation=tf.nn.sigmoid, use_bias=True, name='Dw', reuse=None)
 
         self.Dw_agent = tf.reshape(tf.gather_nd(Dw, self.agent_inds), [-1, 1])
         self.Dw_expert = tf.reshape(tf.gather_nd(Dw, self.expert_inds), [-1, 1])
@@ -52,10 +52,10 @@ class SGDRegressor_occupancy:
         # self.cost_D = tf.reduce_mean(tf.log(1.0-self.Dw_agent)) + tf.reduce_mean(tf.log(self.Dw_expert))
 
         with tf.variable_scope('policy'):
-            pi0 = tf.layers.dense(self.states, 64, activation=tf.nn.sigmoid, use_bias=True)
-            pi1 = tf.layers.dense(pi0, 32, activation=tf.nn.sigmoid, use_bias=True)
-            pi2 = tf.layers.dense(pi1, 16, activation=tf.nn.sigmoid, use_bias=True)
-            pi = tf.layers.dense(pi2, 9, activation=tf.nn.softmax, use_bias=True)
+            pi0 = tf.layers.dense(self.states, 32, activation=tf.nn.sigmoid, use_bias=True)
+            pi1 = tf.layers.dense(pi0, 16, activation=tf.nn.sigmoid, use_bias=True)
+            # pi2 = tf.layers.dense(pi1, 16, activation=tf.nn.sigmoid, use_bias=True)
+            pi = tf.layers.dense(pi1, 9, activation=tf.nn.softmax, use_bias=True)
             self.pi = tf.gather_nd(pi, self.action_ind)
 
         # prediction and cost of policy
@@ -85,7 +85,7 @@ class SGDRegressor_occupancy:
         self.saver = tf.train.Saver()
         self.session = tf.Session()
         self.session.run(init)
-        saver.restore(self.session, self.restore_path)
+        # saver.restore(self.session, self.restore_path)
         self.session.graph.finalize()
 
     def partial_fit_D(self, aOM, eOM, sa_pairs_agent, sa_pairs_expert):
@@ -307,11 +307,37 @@ def run_avg(lst, bin=20):
         out.append(np.mean(lst[max(0, i - bin):min(l - 1, i + bin)]))
     return out
 
+def sample_trajectories_end(game, model):
+    stats = []
+
+    for j in range(200):
+        game.init_game(seed=None)
+        s_a_pairs = []
+        total_rew = 0
+        print('{}/{}'.format(j, 200))
+        while not game.game_over:
+            st = game.state
+
+            # print(np.repeat(st,len(game.actios),axis=0))
+            # print(game.actios)
+
+            action_probs = model.predict_action_prob(np.hstack((np.repeat([st], len(game.actios), axis=0), game.actios)))
+            idx = np.random.choice(range(9), p=action_probs.ravel())
+            d_v = game.actios[idx]
+            s_a_pairs.append(np.hstack((st, d_v)))
+            rew = game.move(d_v)
+            total_rew += rew
+        stats.append((total_rew, len(s_a_pairs), int(game.collision())))
+
+    with open('graphs/graph_imit/stats.txt', 'w') as file:
+            file.writelines([", ".join([str(i) for i in t]) + "\n" for t in stats])
 
 if __name__ == '__main__':
     expert_traj = []
-    for i, t in enumerate(os.listdir('trajectories_all/trajectories_rand_big')):
-        raw_traj = np.load('trajectories_all/trajectories_rand_big/' + t)
+    trajectories_path = 'trajectories_all/trajectories6x30/'
+
+    for i, t in enumerate(os.listdir(trajectories_path)):
+        raw_traj = np.load(trajectories_path + t)
         expert_traj.append(raw_traj)
 
     expert_traj = np.array(expert_traj)
@@ -328,15 +354,15 @@ if __name__ == '__main__':
     delete_imgs('images/')
     logging.basicConfig(filename='images/road_game.log', level=logging.DEBUG)
 
-    N_iterations = 100000
+    N_iterations = 10000
 
+    game = Road_game()
     for i in range(N_iterations):
         print('{}/{}'.format(i, N_iterations))
 
         logging.debug('======Iteration #{}======'.format(i))
-        game = Road_game()
+
         agent_trajs = sample_trajectories(game, model)
-        game.quit()
 
         # Update the Discriminator parameters from wi to wi+1 with the gradient
         aOM, auS, auA = occupancy_measure(agent_trajs)
@@ -351,5 +377,6 @@ if __name__ == '__main__':
         model.partial_fit_policy(aOM, np.hstack((auS, auA)))
 
         measure_perf(model, np.hstack((euS, euA)), np.hstack((auS, auA)), eOM, aOM)
-
         # print(graphs)
+
+    sample_trajectories_end(game, model)

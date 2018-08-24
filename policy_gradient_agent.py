@@ -25,8 +25,8 @@ class PolicyGradient:
         with tf.variable_scope('policy_train', reuse=tf.AUTO_REUSE):
             alpha = 0.5
             beta = 0.001
-            self.b = 25.0
-            self.lambda_ = 0.0005
+            self.b = 5.0
+            self.lambda_ = 0.01
 
             self.risk_metric = risk_metric
 
@@ -51,13 +51,13 @@ class PolicyGradient:
                 self.policy = tf.layers.dense(self.policy1, action_size, activation=tf.nn.softmax, name='policy',
                                               kernel_initializer=tf.contrib.layers.xavier_initializer(),
                                               bias_initializer=tf.contrib.layers.xavier_initializer())
-            if risk_metric == 'variance':
-                with tf.name_scope('reward-update'):
-                    self.reward_loss = tf.losses.mean_squared_error(self.gain, self.sample_reward)
-                    self.reward_train_op = tf.train.AdamOptimizer(learning_rate=alpha).minimize(self.reward_loss)
-                with tf.name_scope('variance-update'):
-                    self.variance_loss = tf.losses.mean_squared_error(self.variance, self.sample_variance)
-                    self.variance_train_op = tf.train.AdamOptimizer(learning_rate=alpha).minimize(self.variance_loss)
+
+            with tf.name_scope('reward-update'):
+                self.reward_loss = tf.losses.mean_squared_error(self.gain, self.sample_reward)
+                self.reward_train_op = tf.train.AdamOptimizer(learning_rate=alpha).minimize(self.reward_loss)
+            with tf.name_scope('variance-update'):
+                self.variance_loss = tf.losses.mean_squared_error(self.variance, self.sample_variance)
+                self.variance_train_op = tf.train.AdamOptimizer(learning_rate=alpha).minimize(self.variance_loss)
 
             self.vars = tf.trainable_variables(scope='policy_train/policy_function')
 
@@ -92,30 +92,26 @@ class PolicyGradient:
             # self.sess.graph.finalize()
 
     def fit(self, states, actions, rewards):
+
+        cumulated_rewards = [PolicyGradient.compute_values(rew) for rew in rewards]
+
+        total_rewards = np.array([rew[0] for rew in cumulated_rewards])
+        sample_mean_reward, sample_variance = np.mean(total_rewards), np.mean((total_rewards-np.mean(total_rewards))**2)
+        self.sess.run([self.reward_train_op, self.variance_train_op], feed_dict={self.sample_reward: sample_mean_reward,self.sample_variance: sample_variance})
+
+        cumulated_rewards = np.hstack(cumulated_rewards)
+
         if self.risk_metric == 'variance':
-            cumulated_rewards = [PolicyGradient.compute_values(rew) for rew in rewards]
 
-            total_rewards = np.array([rew[0] for rew in cumulated_rewards])
-            sample_mean_reward = np.mean(total_rewards)
-            self.sess.run(self.reward_train_op, feed_dict={self.sample_reward: sample_mean_reward})
-            mean_reward = self.sess.run(self.gain)
-            sample_variance = np.mean((total_rewards - sample_mean_reward) ** 2)
-            self.sess.run(self.variance_train_op, feed_dict={self.sample_variance: sample_variance})
-            variance = self.sess.run(self.variance)
+            penalized_rewards = np.array([r - self.lambda_*np.maximum(0.0, sample_variance-self.b)*abs(r-sample_mean_reward) for r in cumulated_rewards])
 
-            print(sample_mean_reward, mean_reward, sample_variance, variance)
-
-            cumulated_rewards = np.hstack([PolicyGradient.compute_values(rew) for rew in rewards])
-            penalized_rewards = np.array([r - self.lambda_*np.maximum(0.0, sample_variance-self.b)**2*(r**2-2*sample_mean_reward) for r in cumulated_rewards])
-
-            normalized_rewards = (penalized_rewards - np.mean(penalized_rewards))/np.std(penalized_rewards + 0.001)
-
+            normalized_rewards = (penalized_rewards - np.mean(penalized_rewards))/(np.std(penalized_rewards) + 0.001)
             self.sess.run(self.policy_train_op, feed_dict={self.states: states,
                                                            self.actions: actions,
                                                            self.reward: normalized_rewards})
         else:
-            cumulated_rewards = np.hstack([PolicyGradient.compute_values(rew) for rew in rewards])
-            normalized_rewards = (cumulated_rewards - np.mean(cumulated_rewards))/np.std(cumulated_rewards + 0.001)
+            # print(cumulated_rewards, np.mean(cumulated_rewards), np.std(cumulated_rewards))
+            normalized_rewards = (cumulated_rewards - np.mean(cumulated_rewards))/(np.std(cumulated_rewards) + 0.001)
             self.sess.run(self.policy_train_op, feed_dict={self.states: states,
                                                            self.actions: actions,
                                                            self.reward: normalized_rewards})
@@ -208,7 +204,7 @@ def perform_experiment(kwargs):
 
 if __name__ == '__main__':
     hyper_b = np.linspace(2.0, 100.0, 3)
-    hyperparams = [{'b': b, 'j': j, 'risk_metric':'variance'} for j, b in enumerate(hyper_b)]
+    hyperparams = [{'b': b, 'j': j} for j, b in enumerate(hyper_b)]
 
     # pool = multiprocessing.Pool(len(hyperparams))
     # pool.map_async(perform_experiment, hyperparams)

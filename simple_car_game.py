@@ -1,20 +1,20 @@
+import os
+import json
+import pickle
 import time
+from datetime import datetime
+
 import numpy as np
 import pygame
-import matplotlib
+from matplotlib import animation
 # matplotlib.use('TkAgg')
 from matplotlib import pyplot as plt
-from matplotlib import animation
 from pygame import QUIT, K_LEFT, K_RIGHT, K_DOWN, K_UP
 from pygame.colordict import THECOLORS
-from datetime import datetime
-from model import Model
-import sys
-import os
-import pickle
-import json
 
-# os.environ["SDL_VIDEODRIVER"] = "dummy"
+from model import Model
+
+os.environ["SDL_VIDEODRIVER"] = "dummy"
 
 ROAD_W = 6  # min value 6
 ROAD_H = 30
@@ -70,7 +70,7 @@ class Road_game:
         self.car_size = [ROAD_W // 5, 2 * ROAD_W // 5]
 
         self.step = 0
-        self.goal = 20
+        self.goal = 50
 
         self.n_cars_behind_l1 = 0
         self.n_cars_behind_l2 = 0
@@ -104,7 +104,7 @@ class Road_game:
 
     @property
     def state(self):
-        vel = np.zeros(self.max_speed-self.min_speed+1)
+        vel = np.zeros(self.max_speed - self.min_speed + 1)
         vel[int(self.car.v - self.min_speed)] = 1.0
         return np.hstack((self.road.pole.reshape(self.state_length), vel))
 
@@ -171,13 +171,15 @@ class Road_game:
             rew = self.move(d_v)
             total_rew.append(rew)
             # print('\rVelocity: {} Reward: {} Step {}'.format(self.car.v, sum(total_rew), self.step), end='')
-            time.sleep(0.15)
+            time.sleep(0.1)
         if not self.collision() and save:
-            np.save('trajectories_all/trajectories60x30/traj_{}.npy'.format(int(datetime.now().timestamp())), s_a_pairs)
+            np.save('trajectories_all/trajectories6x30/traj_{}.npy'.format(int(datetime.now().timestamp())), s_a_pairs)
+            print('{:.2f}'.format(sum(total_rew)))
             return sum(total_rew), len(s_a_pairs), True
         elif len(s_a_pairs) > 30 and save:
-            np.save('trajectories_all/trajectories60x30/traj_{}.npy'.format(int(datetime.now().timestamp())),
+            np.save('trajectories_all/trajectories6x30/traj_{}.npy'.format(int(datetime.now().timestamp())),
                     s_a_pairs[:-10])
+            print('{:.2f}'.format(sum(total_rew[:-10])))
             return sum(total_rew[:-10]), len(s_a_pairs) - 10, True
         return sum(total_rew), len(s_a_pairs), False
 
@@ -222,7 +224,7 @@ class Road_game:
         self.n_cars_behind_l2 = 0
 
         pos1, pos2 = -700, -700
-        car_dists = np.arange(int(self.road.width / 3 + self.car_size[1]), self.road.width * 6, 7)
+        car_dists = np.arange(int(self.road.width + self.car_size[1]), self.road.width * 9, 7)
         for i in range(120):
             self.ov.append(Car([self.road.l2c, pos1], self.car_size, self.road.l2v))
             if not int(-3 * self.car_size[1]) < pos2 < int(3 * self.car_size[1]):
@@ -348,25 +350,24 @@ class Road_game:
 
     def can_accelerate(self, car):
         min_dist = 10000
-        for v in self.ov:
-            if v.pos[0]==self.road.l2c and not v is car:
+        for v in self.ov + [self.car]:
+            if v.pos[0] == self.road.l2c and not v is car:
                 dist = v.pos[1] - car.pos[1]
-                if dist < min_dist and dist > 0:
+                if min_dist > dist > 0:
                     min_dist = dist
 
-        return min_dist >= self.car_size[1]*3
+        return min_dist >= self.car_size[1] * 3
 
     def update_game(self):
 
         for v in self.ov:
-            if v.pos[0]==self.road.l2c:
+            if v.pos[0] == self.road.l2c:
                 chanse = np.random.rand()
+
                 if not self.can_accelerate(v) or 0.2 < chanse < 0.27:
                     v.v = 8
-                    # v.color = THECOLORS.get('blue')
-                elif chanse < 0.1:
+                elif chanse < 0.03:
                     v.v = 9
-                    # v.color = THECOLORS.get('red')
 
         for v in self.ov:
             v.pos[1] += v.v
@@ -382,9 +383,7 @@ def manual_control(seeds, save):
     game.goal = 100
     while True:
         seed = np.random.choice(seeds)
-        print(seed)
-        total_rew, len_traj, saved = game.play_one(seed=seed, save=False)
-        print('\n{:.2f}\n'.format(total_rew))
+        total_rew, len_traj, saved = game.play_one(seed=seed, save=save)
 
 
 def replay_game(traj):
@@ -393,7 +392,7 @@ def replay_game(traj):
     def f(i):
         return traj[i, :-3].reshape((ROAD_W, ROAD_H)).T
 
-    ims = [] # type list
+    ims = []  # type list
     for i in range(len(traj)):
         im = plt.imshow(f(i), animated=True)
         ims.append([im])
@@ -419,8 +418,8 @@ def learn_model(seeds):
 
 
 if __name__ == '__main__':
-    seeds = [17, 19, 23, 29, 31, 37, 41, 43, 47, 53]
+    seeds = [None]
     # for traj in os.listdir('trajectories_all/trajectories60x30'):
     #     replay_game(np.load('trajectories_all/trajectories60x30/' + traj))
-    manual_control(seeds, save=False)
+    manual_control(seeds, save=True)
     # learn_model(seeds)

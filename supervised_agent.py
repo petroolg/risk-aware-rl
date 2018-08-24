@@ -24,7 +24,7 @@ def softmax(x):
 
 
 class SGDRegressor_occupancy:
-    def __init__(self, xd, restore=True):
+    def __init__(self, xd, restore=False):
 
         self.save_path = 'graphs/graph_supervised/graph.ckpt'
 
@@ -34,10 +34,9 @@ class SGDRegressor_occupancy:
         self.weight_ind = tf.placeholder(tf.int32, shape=[None, 2], name='weiht_inds')
 
         with tf.variable_scope('policy'):
-            pi0 = tf.layers.dense(self.states, 64, activation=tf.nn.sigmoid, use_bias=True)
-            pi1 = tf.layers.dense(pi0, 32, activation=tf.nn.sigmoid, use_bias=True)
-            pi2 = tf.layers.dense(pi1, 16, activation=tf.nn.sigmoid, use_bias=True)
-            pi = tf.layers.dense(pi2, 9, activation=tf.nn.softmax, use_bias=True)
+            pi0 = tf.layers.dense(self.states, 32, activation=tf.nn.sigmoid, use_bias=True)
+            pi1 = tf.layers.dense(pi0, 16, activation=tf.nn.sigmoid, use_bias=True)
+            pi = tf.layers.dense(pi1, 9, activation=tf.nn.softmax, use_bias=True)
             self.pi = tf.gather_nd(pi, self.action_ind)
 
         self.weights = tf.constant(np.array([[1, 1, 1, 1, 0.1, 1, 1, 1, 1]]).astype('float32'))
@@ -110,12 +109,13 @@ class SGDRegressor_occupancy:
 
 
 def sample_trajectories(game, model):
-    trajectories = []
+    stats = []
 
-    while len(trajectories) < 20:
+    for j in range(200):
         game.init_game(seed=None)
-        # s_a_pairs = []
+        s_a_pairs = []
         total_rew = 0
+        print('{}/{}'.format(j, 200))
         while not game.game_over:
             st = game.state
 
@@ -125,14 +125,13 @@ def sample_trajectories(game, model):
             action_probs = model.predict(np.hstack((np.repeat([st], len(game.actios), axis=0), game.actios)))
             idx = np.random.choice(range(9), p=action_probs.ravel())
             d_v = game.actios[idx]
-            print(np.sum(action_probs), d_v)
-            # s_a_pairs.append(np.hstack((st, d_v)))
+            s_a_pairs.append(np.hstack((st, d_v)))
             rew = game.move(d_v)
             total_rew += rew
-            time.sleep(0.1)
-            # print('\rVelocity: {}'.format(game.car.v), end='')
-        # trajectories.append(s_a_pairs)
-    # return trajectories
+        stats.append((total_rew, len(s_a_pairs), int(game.collision())))
+
+    with open('graphs/graph_supervised/stats.txt', 'w') as file:
+            file.writelines([", ".join([str(i) for i in t]) + "\n" for t in stats])
 
 
 def one_hot(actions, game):
@@ -147,7 +146,7 @@ def one_hot(actions, game):
 if __name__ == '__main__':
     expert_traj = []
 
-    traj_path = 'trajectories_all/trajectories_rand_big/'
+    traj_path = 'trajectories_all/trajectories6x30/'
 
     game = Road_game()
 
@@ -164,7 +163,7 @@ if __name__ == '__main__':
 
     logging.basicConfig(filename='images/road_game.log', level=logging.DEBUG)
 
-    N_iterations = 2000
+    N_iterations = 4000
 
     for i in range(N_iterations):
         print('{}/{}'.format(i, N_iterations))
