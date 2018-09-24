@@ -171,7 +171,7 @@ class Road_game:
             rew = self.move(d_v)
             total_rew.append(rew)
             # print('\rVelocity: {} Reward: {} Step {}'.format(self.car.v, sum(total_rew), self.step), end='')
-            time.sleep(0.1)
+            # time.sleep(0.5)
         if not self.collision() and save:
             np.save('trajectories_all/trajectories6x30/traj_{}.npy'.format(int(datetime.now().timestamp())), s_a_pairs)
             print('{:.2f}'.format(sum(total_rew)))
@@ -245,10 +245,11 @@ class Road_game:
         for v in self.ov:
             v.draw_safe(self.DISPLAY, self.car.pos[1])
 
+        self.car.draw_safe(self.DISPLAY, self.car.pos[1])
+
         for v in self.ov:
             v.draw(self.DISPLAY, self.car.pos[1])
 
-        self.car.draw_safe(self.DISPLAY, self.car.pos[1])
         self.car.draw(self.DISPLAY, self.car.pos[1])
 
         pygame.display.update()
@@ -421,5 +422,5 @@ if __name__ == '__main__':
     seeds = [None]
     # for traj in os.listdir('trajectories_all/trajectories60x30'):
     #     replay_game(np.load('trajectories_all/trajectories60x30/' + traj))
-    manual_control(seeds, save=True)
+    manual_control(seeds, save=False)
     # learn_model(seeds)

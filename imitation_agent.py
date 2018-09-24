@@ -373,7 +373,6 @@ if __name__ == '__main__':
             plot_graphs('images/stat_graph.png')
             model.save_sess()
 
-        # Take a policy step from θi to θi+1, using the TRPO rule with cost function log(Dwi+1 (s, a)).
         model.partial_fit_policy(aOM, np.hstack((auS, auA)))
 
         measure_perf(model, np.hstack((euS, euA)), np.hstack((auS, auA)), eOM, aOM)

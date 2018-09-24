@@ -23,8 +23,8 @@ def softmax(x):
     return e_x / e_x.sum(axis=0)  # only difference
 
 
-class SGDRegressor_occupancy:
-    def __init__(self, xd, restore=False):
+class SGDRegressor:
+    def __init__(self, xd, restore=True):
 
         self.save_path = 'graphs/graph_supervised/graph.ckpt'
 
@@ -105,7 +105,6 @@ class SGDRegressor_occupancy:
                               feed_dict={self.actions: actions, self.states: sa_pairs[:, :-2], self.action_ind: inds,
                                          self.weight_ind: weight_inds})
         comy = np.multiply(weights, softm)
-        comy_mean = np.mean(comy)
 
 
 def sample_trajectories(game, model):
@@ -146,7 +145,7 @@ def one_hot(actions, game):
 if __name__ == '__main__':
     expert_traj = []
 
-    traj_path = 'trajectories_all/trajectories6x30/'
+    traj_path = '/Users/petrovao/mnt/space/Projects/risk-aware-rl/trajectories_all/trajectories6x30/'
 
     game = Road_game()
 
@@ -159,19 +158,27 @@ if __name__ == '__main__':
     X = expert_tuples[:, :-2]
     y = expert_tuples[:, -2:]
     y = one_hot(y, game)
-    model = SGDRegressor_occupancy(expert_traj[0].shape[1])
+    model = SGDRegressor(expert_traj[0].shape[1])
+    #
+    # logging.basicConfig(filename='images/road_game.log', level=logging.DEBUG)
+    #
+    # N_iterations = 5000
+    #
+    # for i in range(N_iterations):
+    #     print('{}/{}'.format(i, N_iterations))
+    #
+    #     logging.debug('======Iteration #{}======'.format(i))
+    #     model.partial_fit(expert_tuples, y)
+    #     # model.look_incide(expert_tuples, y)
+    #
+    # model.save_sess()
 
-    logging.basicConfig(filename='images/road_game.log', level=logging.DEBUG)
+    # sample_trajectories(game, model)
 
-    N_iterations = 4000
+    yp = []
+    for st in X:
+        action_probs = model.predict(np.hstack((np.repeat([st], len(game.actios), axis=0), game.actios)))
+        idx = np.argmax(action_probs.ravel())
+        yp.append(idx)
 
-    for i in range(N_iterations):
-        print('{}/{}'.format(i, N_iterations))
-
-        logging.debug('======Iteration #{}======'.format(i))
-        model.partial_fit(expert_tuples, y)
-        # model.look_incide(expert_tuples, y)
-
-    model.save_sess()
-
-    sample_trajectories(game, model)
+    np.save('graphs/graph_supervised/y_supervised', yp)
