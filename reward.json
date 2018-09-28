@@ -6,5 +6,5 @@
   "pass_slow": -1.0,
   "nil": 0,
   "safe_collision": -0.05,
-  "default": -2.0
+  "default": 0.0
 }

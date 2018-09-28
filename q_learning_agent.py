@@ -1,13 +1,13 @@
+import argparse
+import multiprocessing
+
 import tensorflow as tf
+
 from simple_car_game import *
-from model import Model
+
 # import matplotlib
 # matplotlib.use("Agg")
 # from matplotlib import pyplot as plt
-import time
-import pickle
-import multiprocessing
-import argparse
 
 global transition_model
 
@@ -276,7 +276,7 @@ if __name__ == '__main__':
                        enumerate(hyperparams)]
 
     elif name == 'cvar':
-        hyper_alpha = np.linspace(0.1, 0.9, 3)
+        hyper_alpha = np.linspace(0.3, 0.9, 3)
         hyper_p = np.linspace(0.6, 1.0, 3)
         hyperparams = list(zip(list(np.tile(hyper_p, len(hyper_alpha))), list(np.repeat(hyper_alpha, len(hyper_p)))))
         hyperparams = [{'p': p_a[0], 'alpha': p_a[1], 'j': j, 'n_steps': 2, 'risk_metric': 'cvar'} for j, p_a in
@@ -290,6 +290,9 @@ if __name__ == '__main__':
         hyperparams = [{'p': p_b[0], 'ps': 2, 'b': p_b[1], 'j': j, 'n_steps': 4, 'risk_metric': 'mean_deviation'} for
                        j, p_b in
                        enumerate(hyperparams)]
+
+    elif name == 'model_based':
+        hyperparams = [{'j': i, 'type': 'model_based'} for i in range(10)]
 
     else:
         hyperparams = [{'j': i} for i in range(10)]
