@@ -204,12 +204,12 @@ def perform_experiment(kwargs):
 
 if __name__ == '__main__':
     hyper_b = np.linspace(2.0, 100.0, 3)
-    hyperparams = [{'b': b, 'j': j} for j, b in enumerate(hyper_b)]
+    hyperparams = [{'b': b, 'j': j, 'risk_metric':'variance'} for j, b in enumerate(hyper_b)]
 
-    # pool = multiprocessing.Pool(len(hyperparams))
-    # pool.map_async(perform_experiment, hyperparams)
-    #
-    # pool.close()
-    # pool.join()
+    pool = multiprocessing.Pool(len(hyperparams))
+    pool.map_async(perform_experiment, hyperparams)
 
-    perform_experiment(hyperparams[0])
+    pool.close()
+    pool.join()
+
+    # perform_experiment(hyperparams[0])

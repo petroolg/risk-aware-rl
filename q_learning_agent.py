@@ -26,8 +26,8 @@ class QApprox:
             self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
             with tf.variable_scope('Q_function'):
-                self.Q0 = tf.layers.dense(self.sa_pairs, 60, activation=tf.nn.leaky_relu, name='Q0')
-                self.Q1 = tf.layers.dense(self.Q0, 30, activation=tf.nn.leaky_relu, name='Q1')
+                self.Q0 = tf.layers.dense(self.sa_pairs, 300, activation=tf.nn.leaky_relu, name='Q0')
+                self.Q1 = tf.layers.dense(self.Q0, 100, activation=tf.nn.leaky_relu, name='Q1')
                 self.Q = tf.layers.dense(self.Q1, 1, name='Q')
 
             self.cost = tf.reduce_mean(tf.squared_difference(self.Q, self.target))
