@@ -184,30 +184,20 @@ class Road_game:
         return sum(total_rew), len(s_a_pairs), False
 
     # function plays one game, computes total reward and zk along trajectory
-    def play_one_learn_model(self, model: Model, seed=None, save=False):
+    def play_one_learn_model(self, model: Model, seed=None):
         total_rew = 0.0
         self.init_game(seed=seed)
 
         s_a_pairs = []
 
         while not self.game_over:
-            # rew, zk = self.auto_move(zk)
             st = self.state.copy()
-            # d_v = self.process_keys()
             idx = np.random.choice(range(9))
             d_v = self.actios[idx]
-            s_a_pairs.append(np.hstack((st, d_v)))
             rew = self.move(d_v)
             model.add_prob(st, self.actios.index(list(d_v)), self.state.copy(), self.event())
             total_rew += rew
-            print('\rVelocity: {}'.format(self.car.v), end='')
-            time.sleep(0.15)
-        if not self.collision() and save:
-            np.save('trajectories_all/trajectories60x30safety/traj_{}.npy'.format(int(datetime.now().timestamp())),
-                    s_a_pairs)
-        elif np.array(s_a_pairs).shape[0] > 30 and save:
-            np.save('trajectories_all/trajectories60x30safety/traj_{}.npy'.format(int(datetime.now().timestamp())),
-                    s_a_pairs[:-10])
+            # print('\rVelocity: {}'.format(self.car.v), end='')
         return total_rew
 
     # initialization function, chooses state randomly
@@ -404,23 +394,28 @@ def replay_game(traj):
     plt.show()
 
 
-def learn_model(seeds):
+def learn_model(seeds, model_name):
     game = Road_game()  # instance of a game
-    # model = pickle.load(open('trans_model_safe.pckl', 'rb'))
-    model = Model()
+    transition_model = pickle.load(open(model_name, 'rb'))
+    # model = Model()
 
-    while True:
-        # seed = np.random.choice(seeds)
+    learning_steps = 100000
+    for i in range(learning_steps):
+        seed = np.random.choice(seeds)
         # print(seed)
-        total_rew = game.play_one_learn_model(model, seed=None)
-        print('\n{:.2f}\n'.format(total_rew))
-        with open('trans_model_safe.pckl', 'wb') as file:
-            pickle.dump(model, file)
+        total_rew = game.play_one_learn_model(transition_model, seed=seed)
+        # print('\n{:.2f}\n'.format(total_rew))
+        print('\r{}/{}'.format(i, learning_steps), end='')
+        if i % 1000 == 0:
+            with open(model_name, 'wb') as file:
+                pickle.dump(transition_model, file)
+            with open(model_name + '.bk', 'wb') as file:
+                pickle.dump(transition_model, file)
 
 
 if __name__ == '__main__':
-    seeds = [None]
+    seeds = [17, 19, 23, 29, 31, 37, 41, 43, 47, 53]
     # for traj in os.listdir('trajectories_all/trajectories60x30'):
     #     replay_game(np.load('trajectories_all/trajectories60x30/' + traj))
-    manual_control(seeds, save=False)
-    # learn_model(seeds)
+    # manual_control(seeds, save=False)
+    learn_model(seeds, model_name='trans_model_safe.pckl')

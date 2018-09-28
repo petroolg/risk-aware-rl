@@ -6,13 +6,12 @@ from model import Model
 # from matplotlib import pyplot as plt
 import time
 import pickle
-import scipy.interpolate
 import multiprocessing
 import argparse
 
 global transition_model
 
-GAMMA = 0.7
+GAMMA = 0.9
 
 
 class QApprox:
@@ -253,7 +252,7 @@ def perform_experiment(kwargs):
         kwargs['seed'] = seed
         total_rew = play_game(game, model, transition_model, **kwargs)
         print('\r{}/{}'.format(i, learning_steps), end='')
-        if i % 10 == 0:
+        if i % 1000 == 0:
             model.save_session()
 
 
@@ -277,8 +276,8 @@ if __name__ == '__main__':
                        enumerate(hyperparams)]
 
     elif name == 'cvar':
-        hyper_alpha = np.linspace(0.1, 0.8, 3)
-        hyper_p = np.linspace(0.6, 8.0, 2)
+        hyper_alpha = np.linspace(0.1, 0.9, 3)
+        hyper_p = np.linspace(0.6, 1.0, 3)
         hyperparams = list(zip(list(np.tile(hyper_p, len(hyper_alpha))), list(np.repeat(hyper_alpha, len(hyper_p)))))
         hyperparams = [{'p': p_a[0], 'alpha': p_a[1], 'j': j, 'n_steps': 2, 'risk_metric': 'cvar'} for j, p_a in
                        enumerate(hyperparams)]
@@ -293,17 +292,10 @@ if __name__ == '__main__':
                        enumerate(hyperparams)]
 
     else:
-        hyperparams = [{'j': 0}]
+        hyperparams = [{'j': i} for i in range(10)]
 
-    # pool = multiprocessing.Pool(len(hyperparams))
-    # pool.map_async(perform_experiment, hyperparams)
-    #
-    # pool.close()
-    # pool.join()
+    pool = multiprocessing.Pool(len(hyperparams))
+    pool.map_async(perform_experiment, hyperparams)
 
-    perform_experiment(hyperparams[0])
-
-    with open(model_name, 'wb') as file:
-        pickle.dump(transition_model, file)
-    with open(model_name + '.bk', 'wb') as file:
-        pickle.dump(transition_model, file)
+    pool.close()
+    pool.join()
