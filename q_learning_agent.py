@@ -11,7 +11,7 @@ from simple_car_game import *
 
 global transition_model
 
-GAMMA = 0.9
+GAMMA = 0.7
 model_name = 'trans_model_safe.pckl'
 
 class QApprox:
@@ -175,7 +175,7 @@ class QApprox:
             else:
                 for i, s_prime in enumerate(s_primes):
                     s_a_next = np.hstack((np.tile([np.frombuffer(s_prime, dtype=int)], (9, 1)), np.eye(9)))
-                    s_a_next = self.predict(s_a_next, game, transition_model)
+                    s_a_next = self.predict(s_a_next, game, transition_model, with_risk=True)
                     a_prime = np.argmax(s_a_next)
 
                     p, r = self.multi_step_distr_recursion(s_prime, a_prime, transition_model, game, gamma, n + 1,
@@ -189,7 +189,7 @@ class QApprox:
         return next_p, next_r
 
 
-def softmax(vec, tau=0.4):
+def softmax(vec, tau=0.1):
     return np.exp(vec/tau) / np.sum(np.exp(vec/tau))
 
 
@@ -292,8 +292,8 @@ if __name__ == '__main__':
                        enumerate(hyperparams)]
 
     elif name == 'cvar':
-        hyper_alpha = np.linspace(0.3, 0.9, 3)
-        hyper_p = np.linspace(0.6, 1.0, 3)
+        hyper_alpha = np.linspace(0.2, 0.9, 3)
+        hyper_p = np.linspace(0.1, 1.0, 3)
         hyperparams = list(zip(list(np.tile(hyper_p, len(hyper_alpha))), list(np.repeat(hyper_alpha, len(hyper_p)))))
         hyperparams = [{'p': p_a[0], 'alpha': p_a[1], 'j': j, 'n_steps': 2, 'risk_metric': 'cvar'} for j, p_a in
                        enumerate(hyperparams)]
@@ -318,3 +318,5 @@ if __name__ == '__main__':
 
     pool.close()
     pool.join()
+
+    # perform_experiment(hyperparams[0])
