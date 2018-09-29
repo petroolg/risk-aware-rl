@@ -292,8 +292,8 @@ if __name__ == '__main__':
                        enumerate(hyperparams)]
 
     elif name == 'cvar':
-        hyper_alpha = np.linspace(0.2, 0.9, 3)
-        hyper_p = np.linspace(0.1, 1.0, 3)
+        hyper_alpha = np.linspace(0.3, 0.8, 4)
+        hyper_p = np.linspace(0.1, 8.0, 4)
         hyperparams = list(zip(list(np.tile(hyper_p, len(hyper_alpha))), list(np.repeat(hyper_alpha, len(hyper_p)))))
         hyperparams = [{'p': p_a[0], 'alpha': p_a[1], 'j': j, 'n_steps': 2, 'risk_metric': 'cvar'} for j, p_a in
                        enumerate(hyperparams)]
