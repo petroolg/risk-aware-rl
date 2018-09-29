@@ -70,7 +70,7 @@ class Road_game:
         self.car_size = [ROAD_W // 5, 2 * ROAD_W // 5]
 
         self.step = 0
-        self.goal = 30
+        self.goal = 50
 
         self.n_cars_behind_l1 = 0
         self.n_cars_behind_l2 = 0

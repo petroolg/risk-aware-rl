@@ -12,7 +12,7 @@ from simple_car_game import *
 global transition_model
 
 GAMMA = 0.9
-
+model_name = 'trans_model_safe.pckl'
 
 class QApprox:
 
@@ -26,9 +26,18 @@ class QApprox:
             self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
             with tf.variable_scope('Q_function'):
-                self.Q0 = tf.layers.dense(self.sa_pairs, 300, activation=tf.nn.leaky_relu, name='Q0')
-                self.Q1 = tf.layers.dense(self.Q0, 100, activation=tf.nn.leaky_relu, name='Q1')
-                self.Q = tf.layers.dense(self.Q1, 1, name='Q')
+                self.Q0 = tf.layers.dense(self.sa_pairs, 128, activation=tf.nn.leaky_relu, name='Q0',
+                                          kernel_initializer=tf.contrib.layers.xavier_initializer(),
+                                          bias_initializer=tf.contrib.layers.xavier_initializer()
+                                          )
+                self.Q1 = tf.layers.dense(self.Q0, 64, activation=tf.nn.leaky_relu, name='Q1',
+                                          kernel_initializer=tf.contrib.layers.xavier_initializer(),
+                                          bias_initializer=tf.contrib.layers.xavier_initializer()
+                                          )
+                self.Q = tf.layers.dense(self.Q1, 1, name='Q',
+                                         kernel_initializer=tf.contrib.layers.xavier_initializer(),
+                                         bias_initializer=tf.contrib.layers.xavier_initializer()
+                                         )
 
             self.cost = tf.reduce_mean(tf.squared_difference(self.Q, self.target))
             self.optimizer = tf.train.AdamOptimizer(learning_rate=0.01)
@@ -64,10 +73,10 @@ class QApprox:
         self.sess.run(self.train_op,feed_dict={self.sa_pairs: np.atleast_2d(sa_pairs),
                                                            self.target: np.atleast_2d(target)})
 
-    def predict(self, sa_pairs, game, transition_model, **kwargs):
+    def predict(self, sa_pairs, game, transition_model, with_risk=False, **kwargs):
         Q = self.sess.run(self.Q, feed_dict={self.sa_pairs: np.atleast_2d(sa_pairs)})
 
-        if kwargs.get('risk_metric', None):
+        if kwargs.get('risk_metric', None) and with_risk:
             risk = np.array([self.risk_metric(game,
                                               transition_model,
                                               sa_pair[:-9],
@@ -180,7 +189,7 @@ class QApprox:
         return next_p, next_r
 
 
-def softmax(vec, tau=0.6):
+def softmax(vec, tau=0.4):
     return np.exp(vec/tau) / np.sum(np.exp(vec/tau))
 
 
@@ -188,7 +197,7 @@ def play_game(game, model, transition_model, **kwargs):
     sa_pairs, targets = [], []
     total_rews, collisions = [], []
 
-    for i in range(1):
+    for i in range(10):
         game.init_game(seed=kwargs.get('seed', None))
         total_rew = 0
         while not game.game_over:
@@ -204,7 +213,7 @@ def play_game(game, model, transition_model, **kwargs):
             #  [-1, 0],
             #  [-1, -1]]
 
-            action_probs = model.predict(s_a, game, transition_model, **kwargs)
+            action_probs = model.predict(s_a, game, transition_model, with_risk=True, **kwargs)
 
             idx = np.random.choice(range(9), p=softmax(action_probs).ravel())
             d_v = game.actios[idx]
@@ -226,7 +235,8 @@ def play_game(game, model, transition_model, **kwargs):
         total_rews.append(total_rew)
         collisions.append(game.collision())
 
-    model.fit(sa_pairs, np.array(targets)[np.newaxis].T)
+        model.fit(sa_pairs, np.array(targets)[np.newaxis].T)
+
     model.add_summary(sa_pairs, np.array(targets)[np.newaxis].T, total_rews, collisions)
 
     return total_rews
@@ -245,15 +255,21 @@ def perform_experiment(kwargs):
     model = QApprox(197, risk_metric=risk_metric, summary_name=summary_name)
     seeds = [17, 19, 23, 29, 31, 37, 41, 43, 47, 53]
 
-    learning_steps = 10000
+    learning_steps = 1000
 
     for i in range(learning_steps):
         seed = np.random.choice(seeds)
         kwargs['seed'] = seed
         total_rew = play_game(game, model, transition_model, **kwargs)
+
         print('\r{}/{}'.format(i, learning_steps), end='')
-        if i % 1000 == 0:
+
+        if i % 100 == 0:
             model.save_session()
+            # with open(model_name, 'wb') as file:
+            #     pickle.dump(transition_model, file)
+            # with open(model_name + '.bk', 'wb') as file:
+            #     pickle.dump(transition_model, file)
 
 
 if __name__ == '__main__':
@@ -265,7 +281,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     name = args.experiment_name
 
-    model_name = 'trans_model_safe.pckl'
+
     transition_model = pickle.load(open(model_name, 'rb'))
 
     if name == 'entropy':
