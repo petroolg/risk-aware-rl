@@ -290,7 +290,7 @@ if __name__ == '__main__':
         hyperparams = list(zip(list(np.tile(hyper_p, len(hyper_lambda))), list(np.repeat(hyper_lambda, len(hyper_p)))))
         hyperparams = [{'p': p_l[0], 'l': p_l[1], 'j': j, 'n_steps': 2, 'risk_metric': 'entropy'} for j, p_l in
                        enumerate(hyperparams)]
-
+    # completed
     elif name == 'cvar':
         hyper_alpha = np.linspace(0.3, 0.8, 4)
         hyper_p = np.linspace(0.1, 0.8, 4)
