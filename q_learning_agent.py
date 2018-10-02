@@ -1,5 +1,4 @@
 import argparse
-import multiprocessing
 
 import tensorflow as tf
 
@@ -11,7 +10,7 @@ from simple_car_game import *
 
 global transition_model
 
-GAMMA = 0.7
+GAMMA = 0.9
 model_name = 'trans_model_safe.pckl'
 
 class QApprox:
@@ -74,7 +73,7 @@ class QApprox:
                                                            self.target: np.atleast_2d(target)})
 
     def predict(self, sa_pairs, game, transition_model, with_risk=False, **kwargs):
-        Q = self.sess.run(self.Q, feed_dict={self.sa_pairs: np.atleast_2d(sa_pairs)})
+        Q, step = self.sess.run([self.Q, self.global_step], feed_dict={self.sa_pairs: np.atleast_2d(sa_pairs)})
 
         if kwargs.get('risk_metric', None) and with_risk:
             risk = np.array([self.risk_metric(game,
@@ -84,7 +83,7 @@ class QApprox:
                                               **kwargs)
                              for sa_pair in sa_pairs])
 
-            return kwargs['p'] * risk + (1 - kwargs['p']) * Q.ravel()
+            return np.exp(-step / 3000) * kwargs['p'] * risk + (1 - kwargs['p'] * np.exp(-step / 3000)) * Q.ravel()
         else:
             return Q.ravel()
 
@@ -189,7 +188,7 @@ class QApprox:
         return next_p, next_r
 
 
-def softmax(vec, tau=0.1):
+def softmax(vec, tau=0.01):
     return np.exp(vec/tau) / np.sum(np.exp(vec/tau))
 
 
@@ -225,7 +224,7 @@ def play_game(game, model, transition_model, **kwargs):
             total_rew += rew
 
             s_a_next = np.hstack((np.tile([game.state.copy()], (9, 1)), np.eye(9)))
-            s_a_next = model.predict(s_a_next, game, transition_model, **kwargs)
+            s_a_next = model.predict(s_a_next, game, transition_model, with_risk=True, **kwargs)
             # print(s_a_next)
             trgt = rew + GAMMA * np.max(s_a_next)
             sa_pairs.append(cur_sa)
@@ -264,7 +263,7 @@ def perform_experiment(kwargs):
 
         print('\r{}/{}'.format(i, learning_steps), end='')
 
-        if i % 100 == 0:
+        if i % 50 == 0:
             model.save_session()
             # with open(model_name, 'wb') as file:
             #     pickle.dump(transition_model, file)
@@ -286,14 +285,14 @@ if __name__ == '__main__':
 
     if name == 'entropy':
         hyper_p = np.linspace(0.1, 0.6, 3)
-        hyper_lambda = np.linspace(0.05, 0.95, 3)
+        hyper_lambda = np.linspace(0.05, 0.6, 3)
         hyperparams = list(zip(list(np.tile(hyper_p, len(hyper_lambda))), list(np.repeat(hyper_lambda, len(hyper_p)))))
         hyperparams = [{'p': p_l[0], 'l': p_l[1], 'j': j, 'n_steps': 2, 'risk_metric': 'entropy'} for j, p_l in
                        enumerate(hyperparams)]
 
     elif name == 'cvar':
-        hyper_alpha = np.linspace(0.3, 0.8, 4)
-        hyper_p = np.linspace(0.1, 0.8, 4)
+        hyper_p = np.linspace(0.3, 0.6, 3)
+        hyper_alpha = np.linspace(0.4, 0.8, 3)
         hyperparams = list(zip(list(np.tile(hyper_p, len(hyper_alpha))), list(np.repeat(hyper_alpha, len(hyper_p)))))
         hyperparams = [{'p': p_a[0], 'alpha': p_a[1], 'j': j, 'n_steps': 2, 'risk_metric': 'cvar'} for j, p_a in
                        enumerate(hyperparams)]
