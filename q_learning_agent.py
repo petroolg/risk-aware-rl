@@ -188,7 +188,7 @@ class QApprox:
         return next_p, next_r
 
 
-def softmax(vec, tau=0.01):
+def softmax(vec, tau=0.1):
     return np.exp(vec/tau) / np.sum(np.exp(vec/tau))
 
 
