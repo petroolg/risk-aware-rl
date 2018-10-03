@@ -4,10 +4,6 @@ import tensorflow as tf
 
 from simple_car_game import *
 
-# import matplotlib
-# matplotlib.use("Agg")
-# from matplotlib import pyplot as plt
-
 global transition_model
 
 GAMMA = 0.9
@@ -83,7 +79,9 @@ class QApprox:
                                               **kwargs)
                              for sa_pair in sa_pairs])
 
-            return np.exp(-step / 3000) * kwargs['p'] * risk + (1 - kwargs['p'] * np.exp(-step / 3000)) * Q.ravel()
+            # return np.exp(-step / 3000) * kwargs['p'] * risk + (1 - kwargs['p'] * np.exp(-step / 3000)) * Q.ravel()
+            # print(('{:.2f} '*9).format(*risk))
+            return risk
         else:
             return Q.ravel()
 
@@ -143,7 +141,7 @@ class QApprox:
         return float(c_var)
 
     def multi_step_distr(self, s, a, trans_model, game, gamma, n_steps):
-        p, r = self.multi_step_distr_recursion(s, a, trans_model, game, gamma, 0, n_steps)
+        p, r = self.multi_step_distr_recursion(s, a, trans_model, game, gamma, 1, n_steps)
 
         prob, rews = [], []
 
@@ -188,16 +186,18 @@ class QApprox:
         return next_p, next_r
 
 
-def softmax(vec, tau=0.1):
+def softmax(vec, tau=0.001):
     return np.exp(vec/tau) / np.sum(np.exp(vec/tau))
 
 
-def play_game(game, model, transition_model, **kwargs):
+def play_game(game, model, transition_model, seeds, **kwargs):
     sa_pairs, targets = [], []
     total_rews, collisions = [], []
 
     for i in range(10):
-        game.init_game(seed=kwargs.get('seed', None))
+        seed = np.random.choice(seeds)
+        game.init_game(seed)
+        print(seed)
         total_rew = 0
         while not game.game_over:
             s_a = np.hstack((np.tile([game.state.copy()], (9, 1)), np.eye(9)))
@@ -233,6 +233,7 @@ def play_game(game, model, transition_model, **kwargs):
             # time.sleep(0.15)
         total_rews.append(total_rew)
         collisions.append(game.collision())
+        print(game.collision())
 
         model.fit(sa_pairs, np.array(targets)[np.newaxis].T)
 
@@ -257,18 +258,17 @@ def perform_experiment(kwargs):
     learning_steps = 1000
 
     for i in range(learning_steps):
-        seed = np.random.choice(seeds)
-        kwargs['seed'] = seed
-        total_rew = play_game(game, model, transition_model, **kwargs)
+
+        total_rew = play_game(game, model, transition_model, seeds, **kwargs)
 
         print('\r{}/{}'.format(i, learning_steps), end='')
 
         if i % 50 == 0:
             model.save_session()
-            # with open(model_name, 'wb') as file:
-            #     pickle.dump(transition_model, file)
-            # with open(model_name + '.bk', 'wb') as file:
-            #     pickle.dump(transition_model, file)
+            with open(model_name, 'wb') as file:
+                pickle.dump(transition_model, file)
+            with open(model_name + '.bk', 'wb') as file:
+                pickle.dump(transition_model, file)
 
 
 if __name__ == '__main__':
@@ -294,7 +294,7 @@ if __name__ == '__main__':
         hyper_p = np.linspace(0.3, 0.6, 3)
         hyper_alpha = np.linspace(0.4, 0.8, 3)
         hyperparams = list(zip(list(np.tile(hyper_p, len(hyper_alpha))), list(np.repeat(hyper_alpha, len(hyper_p)))))
-        hyperparams = [{'p': p_a[0], 'alpha': p_a[1], 'j': j, 'n_steps': 2, 'risk_metric': 'cvar'} for j, p_a in
+        hyperparams = [{'p': p_a[0], 'alpha': p_a[1], 'j': j, 'n_steps': 1, 'risk_metric': 'cvar'} for j, p_a in
                        enumerate(hyperparams)]
 
 
@@ -312,10 +312,10 @@ if __name__ == '__main__':
     else:
         hyperparams = [{'j': i} for i in range(10)]
 
-    pool = multiprocessing.Pool(len(hyperparams))
-    pool.map_async(perform_experiment, hyperparams)
+    # pool = multiprocessing.Pool(len(hyperparams))
+    # pool.map_async(perform_experiment, hyperparams)
+    #
+    # pool.close()
+    # pool.join()
 
-    pool.close()
-    pool.join()
-
-    # perform_experiment(hyperparams[0])
+    perform_experiment(hyperparams[0])

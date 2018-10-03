@@ -2,6 +2,9 @@ import numpy as np
 import hashlib
 import sys
 
+import matplotlib
+from matplotlib import pyplot as plt
+
 
 def hash18(val):
     return int(hashlib.sha1(val).hexdigest(), 16) % (sys.maxsize * 2) - sys.maxsize
@@ -33,6 +36,11 @@ class Model:
 
         s_dict = self.transition_model.get(s, {})
         a_dict = s_dict.get(a, {})
+        # plt.imshow(np.frombuffer(s)[:-8].reshape((6,30)))
+        # for st in a_dict.keys():
+        #     plt.imshow(np.frombuffer(st)[:-8].reshape((6,30)))
+        #     plt.show()
+
         if not a_dict:
             return [], []
         mtx = list(a_dict.values())
