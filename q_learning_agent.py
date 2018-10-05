@@ -14,6 +14,7 @@ class QApprox:
     def __init__(self, xd, risk_metric=None, summary_name=''):
         with tf.variable_scope('Q_train', reuse=tf.AUTO_REUSE):
             self.save_path = 'graphs/risk_metric/model/' + summary_name + '/model.ckpt'
+            # self.restore_path = "graphs/risk_metric/model/{'j': 1, 'type': 'pessimistic'}/model.ckpt"
 
             self.sa_pairs = tf.placeholder(tf.float64, (None, xd), name='sa_pairs')
             self.target = tf.placeholder(tf.float64, (None, 1), name='target')
@@ -54,7 +55,7 @@ class QApprox:
 
             init = tf.global_variables_initializer()
             self.sess.run(init)
-            # self.saver.restore(self.sess, self.save_path)
+            # self.saver.restore(self.sess, self.restore_path)
             # self.sess.graph.finalize()
 
             if risk_metric == 'entropy':
@@ -79,9 +80,9 @@ class QApprox:
                                               **kwargs)
                              for sa_pair in sa_pairs])
 
-            # return np.exp(-step / 3000) * kwargs['p'] * risk + (1 - kwargs['p'] * np.exp(-step / 3000)) * Q.ravel()
+            return np.exp(-step / 200) * kwargs['p'] * risk + (1 - kwargs['p'] * np.exp(-step / 200)) * Q.ravel()
             # print(('{:.2f} '*9).format(*risk))
-            return risk
+            # return risk
         else:
             return Q.ravel()
 
@@ -186,7 +187,7 @@ class QApprox:
         return next_p, next_r
 
 
-def softmax(vec, tau=0.001):
+def softmax(vec, tau=0.2):
     return np.exp(vec/tau) / np.sum(np.exp(vec/tau))
 
 
@@ -213,6 +214,7 @@ def play_game(game, model, transition_model, seeds, **kwargs):
             #  [-1, -1]]
 
             action_probs = model.predict(s_a, game, transition_model, with_risk=True, **kwargs)
+            # print(action_probs)
 
             idx = np.random.choice(range(9), p=softmax(action_probs).ravel())
             d_v = game.actios[idx]
@@ -224,8 +226,10 @@ def play_game(game, model, transition_model, seeds, **kwargs):
             total_rew += rew
 
             s_a_next = np.hstack((np.tile([game.state.copy()], (9, 1)), np.eye(9)))
-            s_a_next = model.predict(s_a_next, game, transition_model, with_risk=True, **kwargs)
+            s_a_next = model.predict(s_a_next, game, transition_model, with_risk=False, **kwargs)
             # print(s_a_next)
+            if kwargs.get('type', None) == 'pessimistic':
+                rew = -0.5
             trgt = rew + GAMMA * np.max(s_a_next)
             sa_pairs.append(cur_sa)
             targets.append(trgt)
@@ -233,7 +237,7 @@ def play_game(game, model, transition_model, seeds, **kwargs):
             # time.sleep(0.15)
         total_rews.append(total_rew)
         collisions.append(game.collision())
-        print(game.collision())
+        # print(game.collision())
 
         model.fit(sa_pairs, np.array(targets)[np.newaxis].T)
 
@@ -263,7 +267,7 @@ def perform_experiment(kwargs):
 
         print('\r{}/{}'.format(i, learning_steps), end='')
 
-        if i % 50 == 0:
+        if i % 50 == 0 and i > 0:
             model.save_session()
             with open(model_name, 'wb') as file:
                 pickle.dump(transition_model, file)
@@ -294,7 +298,7 @@ if __name__ == '__main__':
         hyper_p = np.linspace(0.3, 0.6, 3)
         hyper_alpha = np.linspace(0.4, 0.8, 3)
         hyperparams = list(zip(list(np.tile(hyper_p, len(hyper_alpha))), list(np.repeat(hyper_alpha, len(hyper_p)))))
-        hyperparams = [{'p': p_a[0], 'alpha': p_a[1], 'j': j, 'n_steps': 1, 'risk_metric': 'cvar'} for j, p_a in
+        hyperparams = [{'p': p_a[0], 'alpha': p_a[1], 'j': j, 'n_steps': 2, 'risk_metric': 'cvar'} for j, p_a in
                        enumerate(hyperparams)]
 
 
@@ -308,6 +312,9 @@ if __name__ == '__main__':
 
     elif name == 'model_based':
         hyperparams = [{'j': i, 'type': 'model_based'} for i in range(10)]
+
+    elif name == 'pessimistic':
+        hyperparams = [{'j': 1, 'type': 'pessimistic'}]
 
     else:
         hyperparams = [{'j': i} for i in range(10)]
