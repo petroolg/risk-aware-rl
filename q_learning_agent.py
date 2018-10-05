@@ -5,6 +5,7 @@ import tensorflow as tf
 from simple_car_game import *
 
 global transition_model
+import multiprocessing
 
 GAMMA = 0.9
 model_name = 'trans_model_safe.pckl'
@@ -295,8 +296,8 @@ if __name__ == '__main__':
                        enumerate(hyperparams)]
     # completed
     elif name == 'cvar':
-        hyper_p = np.linspace(0.3, 0.6, 3)
-        hyper_alpha = np.linspace(0.4, 0.8, 3)
+        hyper_p = [0.3, 0.5, 0.8]
+        hyper_alpha = [0.3, 0.4, 0.6]
         hyperparams = list(zip(list(np.tile(hyper_p, len(hyper_alpha))), list(np.repeat(hyper_alpha, len(hyper_p)))))
         hyperparams = [{'p': p_a[0], 'alpha': p_a[1], 'j': j, 'n_steps': 2, 'risk_metric': 'cvar'} for j, p_a in
                        enumerate(hyperparams)]
@@ -319,10 +320,10 @@ if __name__ == '__main__':
     else:
         hyperparams = [{'j': i} for i in range(10)]
 
-    # pool = multiprocessing.Pool(len(hyperparams))
-    # pool.map_async(perform_experiment, hyperparams)
-    #
-    # pool.close()
-    # pool.join()
+    pool = multiprocessing.Pool(len(hyperparams))
+    pool.map_async(perform_experiment, hyperparams)
 
-    perform_experiment(hyperparams[0])
+    pool.close()
+    pool.join()
+
+    # perform_experiment(hyperparams[0])
