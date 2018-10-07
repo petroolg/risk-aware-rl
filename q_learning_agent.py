@@ -57,8 +57,8 @@ class QApprox:
 
             init = tf.global_variables_initializer()
             self.sess.run(init)
-            self.saver.restore(self.sess, self.restore_path)
-            self.sess.graph.finalize()
+            # self.saver.restore(self.sess, self.restore_path)
+            # self.sess.graph.finalize()
 
             if risk_metric == 'entropy':
                 self.risk_metric = self.entropy_risk
@@ -324,10 +324,10 @@ if __name__ == '__main__':
     else:
         hyperparams = [{'j': i} for i in range(10)]
 
-    # pool = multiprocessing.Pool(len(hyperparams))
-    # pool.map_async(perform_experiment, hyperparams)
-    #
-    # pool.close()
-    # pool.join()
+    pool = multiprocessing.Pool(len(hyperparams))
+    pool.map_async(perform_experiment, hyperparams)
 
-    perform_experiment(hyperparams[0])
+    pool.close()
+    pool.join()
+
+    # perform_experiment(hyperparams[0])
