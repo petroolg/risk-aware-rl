@@ -14,8 +14,8 @@ class QApprox:
 
     def __init__(self, xd, risk_metric=None, summary_name=''):
         with tf.variable_scope('Q_train', reuse=tf.AUTO_REUSE):
-            self.save_path = 'graphs/risk_metric/model/' + summary_name + '/model.ckpt'
-            # self.restore_path = "graphs/risk_metric/model/{'j': 1, 'type': 'pessimistic'}/model.ckpt"
+
+            self.restore_path = "graphs/risk_metric/model/run2018-10-07_16:43:58{'j': 1, 'type': 'pessimistic'}/model.ckpt"
 
             self.sa_pairs = tf.placeholder(tf.float64, (None, xd), name='sa_pairs')
             self.target = tf.placeholder(tf.float64, (None, 1), name='target')
@@ -37,7 +37,7 @@ class QApprox:
                                          )
 
             self.cost = tf.reduce_mean(tf.squared_difference(self.Q, self.target))
-            self.optimizer = tf.train.AdamOptimizer(learning_rate=0.01)
+            self.optimizer = tf.train.AdamOptimizer(learning_rate=0.005)
             self.train_op = self.optimizer.minimize(self.cost, global_step=self.global_step)
 
             vars = tf.trainable_variables(scope='Q_function')
@@ -51,13 +51,14 @@ class QApprox:
             self.merged = tf.summary.merge_all()
             summary_name = 'run{}_{}'.format(str(datetime.date(datetime.now())),
                                              str(datetime.time(datetime.now()))[:8]) + summary_name
+            self.save_path = 'graphs/risk_metric/model/' + summary_name + '/model.ckpt'
             self.train_writer = tf.summary.FileWriter('graphs/risk_metric/' + summary_name, self.sess.graph)
             self.saver = tf.train.Saver()
 
             init = tf.global_variables_initializer()
             self.sess.run(init)
-            # self.saver.restore(self.sess, self.restore_path)
-            # self.sess.graph.finalize()
+            self.saver.restore(self.sess, self.restore_path)
+            self.sess.graph.finalize()
 
             if risk_metric == 'entropy':
                 self.risk_metric = self.entropy_risk
@@ -227,11 +228,14 @@ def play_game(game, model, transition_model, seeds, **kwargs):
             total_rew += rew
 
             s_a_next = np.hstack((np.tile([game.state.copy()], (9, 1)), np.eye(9)))
-            s_a_next = model.predict(s_a_next, game, transition_model, with_risk=False, **kwargs)
+            s_a_next = model.predict(s_a_next, game, transition_model, with_risk=True, **kwargs)
             # print(s_a_next)
             if kwargs.get('type', None) == 'pessimistic':
-                rew = -0.5
-            trgt = rew + GAMMA * np.max(s_a_next)
+                rew = -0.2
+            if not game.game_over:
+                trgt = rew + GAMMA * np.max(s_a_next)
+            else:
+                trgt = rew
             sa_pairs.append(cur_sa)
             targets.append(trgt)
             transition_model.add_prob(cur_sa[:-9], idx, game.state.copy(), game.event())
@@ -297,9 +301,9 @@ if __name__ == '__main__':
     # completed
     elif name == 'cvar':
         hyper_p = [0.3, 0.5, 0.8]
-        hyper_alpha = [0.3, 0.4, 0.6]
+        hyper_alpha = [0.4, 0.4, 0.6]
         hyperparams = list(zip(list(np.tile(hyper_p, len(hyper_alpha))), list(np.repeat(hyper_alpha, len(hyper_p)))))
-        hyperparams = [{'p': p_a[0], 'alpha': p_a[1], 'j': j, 'n_steps': 2, 'risk_metric': 'cvar'} for j, p_a in
+        hyperparams = [{'p': p_a[0], 'alpha': p_a[1], 'j': j, 'n_steps': 3, 'risk_metric': 'cvar'} for j, p_a in
                        enumerate(hyperparams)]
 
 
@@ -320,10 +324,10 @@ if __name__ == '__main__':
     else:
         hyperparams = [{'j': i} for i in range(10)]
 
-    pool = multiprocessing.Pool(len(hyperparams))
-    pool.map_async(perform_experiment, hyperparams)
+    # pool = multiprocessing.Pool(len(hyperparams))
+    # pool.map_async(perform_experiment, hyperparams)
+    #
+    # pool.close()
+    # pool.join()
 
-    pool.close()
-    pool.join()
-
-    # perform_experiment(hyperparams[0])
+    perform_experiment(hyperparams[0])
