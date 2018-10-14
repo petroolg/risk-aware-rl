@@ -1,18 +1,13 @@
-import numpy as np
-from matplotlib import pyplot as plt
-import tensorflow as tf
-from simple_car_game import *
-from model import Model
 # import matplotlib
 # matplotlib.use("Agg")
 # from matplotlib import pyplot as plt
-import time
-import pickle
-import scipy.interpolate
-import multiprocessing
 import argparse
+import multiprocessing
+import tensorflow as tf
 
-GAMMA = 0.95
+from simple_car_game import *
+
+GAMMA = 0.9
 state_size = 188
 action_size = 9
 
@@ -148,13 +143,13 @@ class PolicyGradient:
         return discounted_rewards
 
 
-def play_game(game, model, **kwargs):
+def play_game(game, model):
     states, actions, rewards, collisions = [], [], [], []
-    n_episodes = 20
+    n_episodes = 10
     for _ in range(n_episodes):
         episode_states, episode_actions, episode_rewards = [], [], []
 
-        game.init_game(seed=kwargs.get('seed', None))
+        game.init_game(seed=None)
 
         state = game.state.copy()
         while not game.game_over:
@@ -196,15 +191,25 @@ def perform_experiment(kwargs):
     learning_steps = 10000
 
     for i in range(learning_steps):
-        total_rew = play_game(game, model, **kwargs)
+        total_rew = play_game(game, model)
         print('\r{}/{}'.format(i, learning_steps), end='')
         if i % 10 == 0:
             model.save_session()
 
 
 if __name__ == '__main__':
-    hyper_b = np.linspace(2.0, 100.0, 3)
-    hyperparams = [{'b': b, 'j': j, 'risk_metric':'variance'} for j, b in enumerate(hyper_b)]
+    parser = argparse.ArgumentParser(description='Experiment name')
+    parser.add_argument('experiment_name', type=str, default=None,
+                        help='EXPERIMENT NAME: [variance]')
+
+    args = parser.parse_args()
+    name = args.experiment_name
+
+    if name == 'variance':
+        hyper_b = np.linspace(2.0, 8.0, 3)
+        hyperparams = [{'b': b, 'j': j, 'risk_metric': 'variance'} for j, b in enumerate(hyper_b)]
+    else:
+        hyperparams = [{'j': j} for j in range(8)]
 
     pool = multiprocessing.Pool(len(hyperparams))
     pool.map_async(perform_experiment, hyperparams)
