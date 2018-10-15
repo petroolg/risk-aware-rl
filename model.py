@@ -22,7 +22,7 @@ class Model:
         #       {s2:  [3, ['overtook_1']]
         #        s14: [123, ['nil']]
         #       }
-        #   }
+        #   }, ...
         # }
         #
         self.transition_model = {}
@@ -51,9 +51,6 @@ class Model:
         return np.vstack((freqs / freqs.sum(), rews)).T, keys
 
     def add_prob(self, s_raw, a, s_prime_raw, reward):
-
-        # s = hash18(np.array(s_raw).astype(int).tobytes())
-        # s_prime = hash18(np.array(s_prime_raw).astype(int).tobytes())
 
         s = np.array(s_raw).astype(int).tobytes()
         s_prime = np.array(s_prime_raw).astype(int).tobytes()
