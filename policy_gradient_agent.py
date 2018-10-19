@@ -21,7 +21,7 @@ class PolicyGradient:
             alpha = 0.5
             beta = 0.001
             self.b = variance_threshold if variance_threshold else 5.0
-            self.lambda_ = 5.0
+            self.lambda_ = 0.0001
 
             self.risk_metric = risk_metric
 
@@ -90,8 +90,8 @@ class PolicyGradient:
 
         cumulated_rewards = [PolicyGradient.compute_values(rew) for rew in rewards]
 
-        total_rewards = np.array([rew[0] for rew in cumulated_rewards])
-        sample_mean_reward, sample_variance = np.mean(total_rewards), np.mean((total_rewards-np.mean(total_rewards))**2)
+        total_rewards = np.array([np.sum(rew) for rew in rewards])
+        sample_mean_reward, sample_variance = np.mean(total_rewards), np.var(total_rewards)
         self.sess.run([self.reward_train_op, self.variance_train_op], feed_dict={self.sample_reward: sample_mean_reward,
                                                                                  self.sample_variance: sample_variance})
 
@@ -99,8 +99,9 @@ class PolicyGradient:
 
             cumulated_rewards = np.hstack(cumulated_rewards)
 
-            penalized_rewards = np.array([r - self.lambda_*np.maximum(0.0, sample_variance-self.b)*
-                                          abs(r-sample_mean_reward) for r in cumulated_rewards])
+            penalized_rewards = np.array([r - self.lambda_*np.maximum(0.0, sample_variance-self.b)**2*
+                                          (r-sample_mean_reward) for r in cumulated_rewards])
+
 
             normalized_rewards = (penalized_rewards - np.mean(penalized_rewards))/(np.std(penalized_rewards) + 0.001)
             self.sess.run(self.policy_train_op, feed_dict={self.states: states,
@@ -210,7 +211,7 @@ if __name__ == '__main__':
     name = args.experiment_name
 
     if name == 'variance':
-        hyper_b = [1.0, 1.0, 1.0, 1.5, 1.5, 1.5, 0.5, 0.5, 0.5]
+        hyper_b = [5.0, 5.0, 5.0, 5.0, 5.0, 6.0, 7.0, 7.0, 8.0]
         hyperparams = [{'b': b, 'j': j, 'risk_metric': 'variance'} for j, b in enumerate(hyper_b)]
     else:
         hyperparams = [{'j': j} for j in range(8)]
