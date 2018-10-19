@@ -293,15 +293,15 @@ if __name__ == '__main__':
     transition_model = pickle.load(open(model_name, 'rb'))
 
     if name == 'entropy':
-        hyper_p = np.linspace(0.1, 0.6, 3)
-        hyper_lambda = np.linspace(0.05, 0.6, 3)
+        hyper_p = [0.1, 0.3, 0.6]
+        hyper_lambda = [0.05, 0.2, 0.4]
         hyperparams = list(zip(list(np.tile(hyper_p, len(hyper_lambda))), list(np.repeat(hyper_lambda, len(hyper_p)))))
         hyperparams = [{'p': p_l[0], 'l': p_l[1], 'j': j, 'n_steps': 2, 'risk_metric': 'entropy'} for j, p_l in
                        enumerate(hyperparams)]
     # completed
     elif name == 'cvar':
-        hyper_p = [0.3, 0.5, 0.8]
-        hyper_alpha = [0.4, 0.4, 0.6]
+        hyper_p = [0.1, 0.3, 0.6]
+        hyper_alpha = [0.4, 0.6, 0.8]
         hyperparams = list(zip(list(np.tile(hyper_p, len(hyper_alpha))), list(np.repeat(hyper_alpha, len(hyper_p)))))
         hyperparams = [{'p': p_a[0], 'alpha': p_a[1], 'j': j, 'n_steps': 3, 'risk_metric': 'cvar'} for j, p_a in
                        enumerate(hyperparams)]
