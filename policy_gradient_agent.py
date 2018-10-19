@@ -21,7 +21,7 @@ class PolicyGradient:
             alpha = 0.5
             beta = 0.001
             self.b = variance_threshold if variance_threshold else 5.0
-            self.lambda_ = 0.01
+            self.lambda_ = 5.0
 
             self.risk_metric = risk_metric
 
@@ -210,7 +210,7 @@ if __name__ == '__main__':
     name = args.experiment_name
 
     if name == 'variance':
-        hyper_b = [0.0, 0.0, 0.0, 2.0, 2.0, 2.0, 4.0, 4.0]
+        hyper_b = [1.0, 1.0, 1.0, 1.5, 1.5, 1.5, 0.5, 0.5, 0.5]
         hyperparams = [{'b': b, 'j': j, 'risk_metric': 'variance'} for j, b in enumerate(hyper_b)]
     else:
         hyperparams = [{'j': j} for j in range(8)]
