@@ -21,7 +21,7 @@ class PolicyGradient:
             alpha = 0.5
             beta = 0.001
             self.b = variance_threshold if variance_threshold else 5.0
-            self.lambda_ = 0.0001
+            self.lambda_ = 0.001
 
             self.risk_metric = risk_metric
 
@@ -90,17 +90,19 @@ class PolicyGradient:
 
         cumulated_rewards = [PolicyGradient.compute_values(rew) for rew in rewards]
 
-        total_rewards = np.array([np.sum(rew) for rew in rewards])
-        sample_mean_reward, sample_variance = np.mean(total_rewards), np.var(total_rewards)
+        # total_rewards = np.array([np.sum(rew) for rew in rewards])
+        sample_mean_reward, sample_variance = np.mean(np.hstack(rewards)), np.var(np.hstack(rewards))
         self.sess.run([self.reward_train_op, self.variance_train_op], feed_dict={self.sample_reward: sample_mean_reward,
                                                                                  self.sample_variance: sample_variance})
+        # sample_mean_reward, sample_variance = np.mean(rewards), np.var(rewards)
 
         if self.risk_metric == 'variance':
 
             cumulated_rewards = np.hstack(cumulated_rewards)
+            simple_rewards = np.hstack(rewards)
 
-            penalized_rewards = np.array([r - self.lambda_*np.maximum(0.0, sample_variance-self.b)**2*
-                                          (r-sample_mean_reward) for r in cumulated_rewards])
+            penalized_rewards = np.array([cr - self.lambda_*np.maximum(0.0, sample_variance-self.b)**2*
+                                          (sr**2 - 2*sample_mean_reward) for sr, cr in zip(simple_rewards, cumulated_rewards)])
 
 
             normalized_rewards = (penalized_rewards - np.mean(penalized_rewards))/(np.std(penalized_rewards) + 0.001)
