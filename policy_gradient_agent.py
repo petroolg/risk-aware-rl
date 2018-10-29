@@ -90,11 +90,11 @@ class PolicyGradient:
 
         cumulated_rewards = [PolicyGradient.compute_values(rew) for rew in rewards]
 
-        # total_rewards = np.array([np.sum(rew) for rew in rewards])
-        sample_mean_reward, sample_variance = np.mean(np.hstack(rewards)), np.var(np.hstack(rewards))
+        total_rewards = np.array([np.sum(rew) for rew in rewards])
+        sample_mean_reward, sample_variance = np.mean(np.hstack(total_rewards)), np.var(np.hstack(total_rewards))
         self.sess.run([self.reward_train_op, self.variance_train_op], feed_dict={self.sample_reward: sample_mean_reward,
                                                                                  self.sample_variance: sample_variance})
-        # sample_mean_reward, sample_variance = np.mean(rewards), np.var(rewards)
+        sample_mean_reward, sample_variance = np.mean(np.hstack(rewards)), np.var(np.hstack(rewards))
 
         if self.risk_metric == 'variance':
 
