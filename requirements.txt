@@ -1,0 +1,10 @@
+tensorflow
+pygame
+numpy
+argparse
+pickle
+json
+matplotlib
+hashlib
+datetime
+logging
