@@ -15,7 +15,7 @@ The module contains implementations of two reinforcement learning algorithms:
 - Policy Gradient with variance constraint [3]
 
 # Get started
-The code is compatible with python 3.6. Install the requirements with 
+The code is compatible with python 3.6. Install the requirements:
 
 `pip install -r requirements.txt`
 
