@@ -44,5 +44,5 @@ Implementations are based on: </br>
 [3] Castro, Dotan Di, Tamar, Aviv, and Mannor, Shie. “Policy Gradients with Variance Related Risk Criteria”. In: (June 2012). eprint: 1206. 6404. url: https://arxiv.org/pdf/1206.6404. </br>
 </br>
 </br>
-\* for more modes and parameters access script's help:</br>
-`pyhton <script_name> -h`
+* for more modes and parameters access script's help: </br>
+`python &lt;script_name&gt; -h`
