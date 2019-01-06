@@ -231,7 +231,7 @@ def play_game(game, model, transition_model, **kwargs):
 def perform_experiment(kwargs, transition_model):
     print(kwargs)
 
-    game = Road_game()
+    game = Road_game(n_steps=30)
 
     risk_metric = kwargs.get('risk_metric', None)
     print('Executing for hyperparameters {}'.format(kwargs))

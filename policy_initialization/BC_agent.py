@@ -23,7 +23,7 @@ def softmax(x):
 class SGDRegressor:
     def __init__(self, xd, restore=False):
 
-        self.save_path = 'graphs/graph_supervised/graph.ckpt'
+        self.save_path = 'models/model_BC/model.ckpt'
 
         self.states = tf.placeholder(tf.float32, shape=[None, xd], name='states')
         self.actions = tf.placeholder(tf.float32, shape=[None, 9], name='actions')
@@ -53,7 +53,7 @@ class SGDRegressor:
         else:
             self.session.run(init)
 
-        # self.session.graph.finalize()
+        self.session.graph.finalize()
 
     def partial_fit(self, states, actions):
         self.session.run(self.train, feed_dict={self.actions: actions, self.states: states})
@@ -65,17 +65,19 @@ class SGDRegressor:
         return self.session.run(self.loss, feed_dict={self.actions: actions, self.states: states})
 
     def save_sess(self):
+        if not os.path.exists(os.path.dirname(self.save_path)):
+            os.makedirs(os.path.dirname(self.save_path))
         self.saver.save(self.session, self.save_path)
 
 
-def evaluate_performance(game, model):
+def evaluate_performance(model):
     stats = []
     print("Evaluating performance.")
     for j in range(200):
         game.init_game(seed=None)
         s_a_pairs = []
         total_rew = 0
-        print('\r{}/{}'.format(j, 200), end="")
+        print('\rValidating strategy: {}/{}'.format(j, 200), end="")
         while not game.game_over:
             st = game.state
             action_probs = model.predict(np.atleast_2d(st))
@@ -86,7 +88,7 @@ def evaluate_performance(game, model):
             total_rew += rew
         stats.append((total_rew, len(s_a_pairs), int(game.collision())))
 
-    with open('BC_stats.txt', 'w') as file:
+    with open('results/BC_stats.txt', 'w') as file:
         file.writelines([", ".join([str(i) for i in t]) + "\n" for t in stats])
 
 
@@ -104,6 +106,7 @@ def run_experiment(model, X, y):
         if i % 100 == 0:
             loss = model.compute_loss(X, y)
             print('Iteration {}/{}, Loss: {}'.format(i, N_ITERATIONS, loss))
+            model.save_sess()
         model.partial_fit(X, y)
 
 
@@ -120,20 +123,28 @@ def prepare_data(traj_path):
 
     return X, y
 
+def prepare_experiment():
+    folders = ['results']
+
+    for folder in folders:
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+
 
 if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(description='Experiment parameters')
+    parser = argparse.ArgumentParser(description='Behavioral Cloning experiment parameters')
     parser.add_argument("--tp", dest='traj_path', type=str, required=True, default="trajectories",
                         help='Path to the directory with expert\'s trajectories.')
 
     args = parser.parse_args()
     traj_path = args.traj_path
 
-    game = Road_game()
+    prepare_experiment()
+
     X, y = prepare_data(traj_path)
+    model = SGDRegressor(X.shape[0])
 
-    model = SGDRegressor(X[0].shape[0])
+    game = Road_game(n_steps=50)
     run_experiment(model, X, y)
-    evaluate_performance(game, model)
-
+    evaluate_performance(model)

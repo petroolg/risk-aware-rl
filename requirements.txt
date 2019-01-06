@@ -7,4 +7,3 @@ json
 matplotlib
 hashlib
 datetime
-logging

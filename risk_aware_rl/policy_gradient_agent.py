@@ -188,7 +188,7 @@ def play_game(game, model):
 def perform_experiment(kwargs):
     print(kwargs)
 
-    game = Road_game()
+    game = Road_game(n_steps=30)
 
     print('Executing for hyperparams {}'.format(kwargs))
     summary_name = '{}'.format(kwargs)

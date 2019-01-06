@@ -9,7 +9,7 @@ from model import Model
 
 
 def learn_model(model_name):
-    game = Road_game()  # instance of a game
+    game = Road_game(n_steps=30)  # instance of a game
     transition_model = Model()
 
     learning_steps = 100000

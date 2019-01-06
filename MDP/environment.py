@@ -10,8 +10,6 @@ from model import Model
 from pygame import QUIT, K_LEFT, K_RIGHT, K_DOWN, K_UP
 from pygame.colordict import THECOLORS
 
-# os.environ["SDL_VIDEODRIVER"] = "dummy"
-
 ROAD_W = 6  # min value 6
 ROAD_H = 30
 ZOOM = 10
@@ -60,13 +58,16 @@ class road:
 
 
 class Road_game:
-    def __init__(self):
+    def __init__(self, n_steps=30, visible=False):
+
+        if not visible:
+            os.environ["SDL_VIDEODRIVER"] = "dummy"
 
         self.road = road(ROAD_W, ROAD_H, 6, 8)
         self.car_size = [ROAD_W // 5, 2 * ROAD_W // 5]
 
         self.step = 0
-        self.goal = 50
+        self.goal = n_steps
 
         self.n_cars_behind_l1 = 0
         self.n_cars_behind_l2 = 0
