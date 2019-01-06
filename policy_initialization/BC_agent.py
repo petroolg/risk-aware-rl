@@ -71,13 +71,13 @@ class SGDRegressor:
 
 
 def evaluate_performance(model):
-    stats = []
     print("Evaluating performance.")
-    for j in range(200):
+    stats = []
+    for j in range(N_EVAL_GAMES):
         game.init_game(seed=None)
         s_a_pairs = []
         total_rew = 0
-        print('\rValidating strategy: {}/{}'.format(j, 200), end="")
+        print('\rValidating strategy: {}/{}'.format(j, N_EVAL_GAMES), end="")
         while not game.game_over:
             st = game.state
             action_probs = model.predict(np.atleast_2d(st))
@@ -87,6 +87,19 @@ def evaluate_performance(model):
             rew = game.move(d_v)
             total_rew += rew
         stats.append((total_rew, len(s_a_pairs), int(game.collision())))
+
+    stats = np.array(stats)
+
+    return_ = stats[:, 0]
+    return_per_step = stats[:, 0] / stats[:, 1]
+    episode_length = stats[:, 1]
+    collisions = stats[:, 2]
+
+    print("Performance metrics for the BC agent:")
+    print(f"Return mean: {np.mean(return_)}, median: {np.median(return_)}")
+    print(f"Return per step mean: {np.mean(return_per_step)}, median: {np.median(return_per_step)}")
+    print(f"Episode length: {np.mean(episode_length)}, median: {np.median(episode_length)}")
+    print(f"Collision rate: {sum(collisions) / len(collisions)}")
 
     with open('results/BC_stats.txt', 'w') as file:
         file.writelines([", ".join([str(i) for i in t]) + "\n" for t in stats])
@@ -113,7 +126,7 @@ def run_experiment(model, X, y):
 def prepare_data(traj_path):
     expert_traj = []
     for i, t in enumerate(os.listdir(traj_path)):
-        raw_traj = np.load(traj_path + t)
+        raw_traj = np.load(os.path.join(traj_path, t))
         expert_traj.append(raw_traj)
     expert_traj = np.array(expert_traj)
     expert_tuples = np.vstack(expert_traj)
@@ -141,10 +154,10 @@ if __name__ == '__main__':
     traj_path = args.traj_path
 
     prepare_experiment()
+    game = Road_game(n_steps=50)
 
     X, y = prepare_data(traj_path)
-    model = SGDRegressor(X.shape[0])
+    model = SGDRegressor(X.shape[1])
 
-    game = Road_game(n_steps=50)
     run_experiment(model, X, y)
     evaluate_performance(model)

@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 from environment import *
 
 N_ITERATIONS = 10000
+N_EVAL_GAMES = 200
 GAMMA = 0.9
 lambda_ = 0.1
 
@@ -294,12 +295,13 @@ def run_avg(lst, bin=20):
 
 
 def evaluate_performance(model):
+    print("Evaluating performance.")
     stats = []
-    for j in range(200):
+    for j in range(N_EVAL_GAMES):
         game.init_game()
         s_a_pairs = []
         total_rew = 0
-        print('\rValidating strategy: {}/{}'.format(j, 200), end="")
+        print('\rValidating strategy: {}/{}'.format(j, N_EVAL_GAMES), end="")
         while not game.game_over:
             st = game.state
             action_probs = model.predict_action_prob(
@@ -310,6 +312,19 @@ def evaluate_performance(model):
             rew = game.move(d_v)
             total_rew += rew
         stats.append((total_rew, len(s_a_pairs), int(game.collision())))
+
+    stats = np.array(stats)
+
+    return_ = stats[:, 0]
+    return_per_step = stats[:, 0] / stats[:, 1]
+    episode_length = stats[:, 1]
+    collisions = stats[:, 2]
+
+    print("Performance metrics for the GAIL agent:")
+    print(f"Return mean: {np.mean(return_)}, median: {np.median(return_)}")
+    print(f"Return per step mean: {np.mean(return_per_step)}, median: {np.median(return_per_step)}")
+    print(f"Episode length: {np.mean(episode_length)}, median: {np.median(episode_length)}")
+    print(f"Collision rate: {sum(collisions)/len(collisions)}")
 
     with open('results/GAIL_stats.txt', 'w') as file:
         file.writelines([", ".join([str(i) for i in t]) + "\n" for t in stats])
@@ -365,10 +380,10 @@ if __name__ == '__main__':
     traj_path = args.traj_path
 
     prepare_experiment()
+    game = Road_game(n_steps=50)
 
     eOM, euS, euA = prepare_data(traj_path)
     model = SGDRegressor_occupancy(euS.shape[1])
 
-    game = Road_game(n_steps=50)
     run_experiment(model, eOM, euS, euA)
     evaluate_performance(model)
